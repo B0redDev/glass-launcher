@@ -13,18 +13,29 @@ e apre Glass. Non tocca la Home: finché non la cambi, il tasto Home porta ancor
 
 Requisiti sul PC: JDK 17 in `~/opt/jdk-17*`, Android SDK in `~/Android/Sdk`, adb in `~/platform-tools`.
 
-## Uso
+## Home a righe
+
+Dall'alto: **Preferite** (grandi), **Sorgenti** (HDMI con stato e TV antenna, sempre presente), poi
+**Streaming e TV**, **Strumenti**, **Giochi**, **Altro**. Le righe vuote non si vedono. La riga a fuoco sale
+sempre sotto il titolo (nome della riga + nome dell'app); quelle sopra spariscono, ora e pulsanti in alto
+restano solo sulla prima.
+
+Ogni app sta in una sola riga. Al primo avvio le app note partono nella riga scelta nella proposta di
+design (`App.START`); le altre vanno in Streaming se dichiarano "video", in Giochi se dichiarano "gioco",
+altrimenti in Altro. Da lì decidi tu con Sposta.
 
 | Telecomando | Effetto |
 |---|---|
-| Frecce | Muovono il focus; la griglia scorre una riga alla volta |
-| OK | Apre l'app |
+| ←/→ | Scorre la riga |
+| ↑/↓ | Riga sopra/sotto, sull'elemento più vicino; ↑ dalla prima riga va a Wi-Fi e Impostazioni |
+| OK | Apre l'app, o passa all'ingresso HDMI / TV |
 | OK tenuto premuto | Menu: Sposta, Nascondi / Mostra, Info app, Mostra app nascoste |
-| Sposta → frecce → OK | Riordina (le icone oscillano); Indietro conferma anche lui |
-| Su dalla prima riga | Pulsanti in alto: Ingressi (HDMI, TV), Wi-Fi, Impostazioni |
-| Indietro / Home su Glass | Torna alla prima riga |
+| Sposta → ←/→ | Riordina nella riga (le icone oscillano) |
+| Sposta → ↑/↓ | Porta l'app nella riga sopra/sotto (cambia categoria) |
+| Sposta → OK / Indietro | Conferma |
+| Indietro / Home su Glass | Torna all'inizio della prima riga |
 
-Ordine e app nascoste restano salvati nell'app (si perdono solo disinstallandola).
+Righe, ordine e app nascoste restano salvati nell'app (si perdono solo disinstallandola).
 
 ## Salvaschermo
 
@@ -47,12 +58,14 @@ disattivare l'override Home di Projectivy (sue impostazioni), poi
 
 | File | Cosa fa |
 |---|---|
-| `Home.java` | Activity: layout, focus e scorrimento, menu, sposta/nascondi, ingressi, rete |
+| `Home.java` | Activity: righe, focus e scorrimento, menu, sposta/nascondi, riga Sorgenti, rete |
+| `Row.java` | Una riga: nome, celle, scorrimento orizzontale, animazione di riordino |
 | `Backdrop.java` | Sfondo aurora + alone dell'app a fuoco + copia sfocata per il vetro |
-| `GlassFrame.java` | Pannello Liquid Glass (pulsanti, menu) |
-| `Tile.java` | Banner dell'app: angoli arrotondati, zoom, riflesso, nome |
-| `Grid.java` | Griglia a 5 colonne con animazione di riordino |
-| `App.java` | Elenco app, ordine e app nascoste salvati, caricamento banner |
+| `GlassFrame.java` | Pannello Liquid Glass (pulsanti, card delle sorgenti, menu) |
+| `Tile.java` | Banner dell'app: angoli arrotondati, zoom, riflesso |
+| `App.java` | Elenco app, riga di partenza, righe/ordine/nascoste salvati, caricamento banner |
 | `ClockDream.java` | Salvaschermo orologio |
+
+Design approvato: `/tmp/design-proposal/glass-home/final.html` (variante C · Righe).
 
 Font: Inter (SIL OFL, `FONT-LICENSE-OFL.txt`), ridotto ai caratteri latini. Icone: Material Symbols Rounded (Apache 2.0).

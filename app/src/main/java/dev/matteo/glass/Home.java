@@ -12,6 +12,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.graphics.Rect;
+import android.graphics.drawable.GradientDrawable;
 import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
@@ -29,6 +30,7 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewTreeObserver;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
 import android.widget.FrameLayout;
@@ -39,32 +41,37 @@ import android.widget.TextClock;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 /**
- * tvOS 26 style home: Top Shelf ambience and title, a 5-column grid of banners, glass pills for
- * inputs, network and settings, and a long-press menu to move or hide apps.
+ * tvOS 26 style home in rows: Preferite, the TV's inputs, then one row per category. The focused row
+ * always sits under the title; Sposta reorders within a row (←/→) and moves an app between rows (↑/↓).
  */
 public final class Home extends Activity {
-    private static final int COLS = 5;
     private static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
+    /** Where the focused row's cells sit, under the title. */
+    private static final float FOCUS_Y = 116;
 
     private final Handler main = new Handler(Looper.getMainLooper());
+    private final HashMap<String, Row> rows = new HashMap<>();
+    private final HashMap<String, TextView> inputStatus = new HashMap<>();
     private SharedPreferences prefs;
+    private TvInputManager tim;
     private Backdrop backdrop;
     private ScrollView scroll;
-    private Grid grid;
-    private TextView heroTitle, wifiText;
+    private LinearLayout content, topBar;
+    private Row sources;
+    private TextView overline, title, wifiText;
     private ImageView wifiIcon;
-    private LinearLayout topBar;
-    private GlassFrame inputsPill, hint, panel;
+    private GlassFrame hint, panel;
     private FrameLayout overlay;
-    private View scrim, menuAnchor;
+    private View scrim, menuAnchor, lastFocus;
     private List<App> apps = new ArrayList<>();
-    private App last, moving;
-    private boolean showHidden, resumed;
+    private App moving;
+    private boolean showHidden, resumed, relocating;
     private ValueAnimator scrollAnim, wiggle;
-    private int tileW, tileH, pitch, shelf, side, scrollTarget;
+    private int favW, favH, scrollTarget;
     private volatile int artGen;
 
     private final BroadcastReceiver packages = new BroadcastReceiver() {
@@ -74,18 +81,33 @@ public final class Home extends Activity {
         }
     };
 
+    private final TvInputManager.TvInputCallback inputs = new TvInputManager.TvInputCallback() {
+        @Override
+        public void onInputStateChanged(String id, int state) {
+            TextView s = inputStatus.get(id);
+            if (s != null) setStatus(s, state);
+        }
+
+        @Override
+        public void onInputAdded(String id) {
+            buildSources();
+        }
+
+        @Override
+        public void onInputRemoved(String id) {
+            buildSources();
+        }
+    };
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         Ui.init(this);
         prefs = getSharedPreferences("glass", MODE_PRIVATE);
         DisplayMetrics dm = getResources().getDisplayMetrics();
-        side = Ui.dp(48);
-        int gap = Ui.dp(24);
-        tileW = (dm.widthPixels - 2 * side - (COLS - 1) * gap) / COLS;
-        tileH = tileW * 9 / 16;
-        pitch = tileH + Ui.dp(46);
-        shelf = Math.round(dm.heightPixels * 0.56f);
+        int side = Ui.dp(48);
+        favW = Ui.dp(200);
+        favH = Ui.dp(112.5f);
 
         FrameLayout root = new FrameLayout(this);
         backdrop = new Backdrop(this);
@@ -108,53 +130,55 @@ public final class Home extends Activity {
         scroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         scroll.setClipChildren(false);
         scroll.setOnScrollChangeListener((v, x, y, ox, oy) -> chrome(y));
-        LinearLayout content = new LinearLayout(this);
+        content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
         content.setClipChildren(false);
-
-        FrameLayout hero = new FrameLayout(this);
-        heroTitle = Ui.text(this, Ui.semibold, 40, 0xFFFFFFFF);
-        heroTitle.setShadowLayer(Ui.dp(16), 0, Ui.dp(2), 0x66000000);
-        FrameLayout.LayoutParams hl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.BOTTOM | Gravity.START);
-        hl.leftMargin = side;
-        hl.bottomMargin = Ui.dp(26);
-        hero.addView(heroTitle, hl);
-        content.addView(hero, MATCH, shelf);
-
-        grid = new Grid(this, COLS, tileW, tileH + Ui.dp(34), gap, pitch);
-        // Room below the last row so it can scroll up to the same spot as every other row.
-        grid.setPadding(side, 0, side, Math.max(0, dm.heightPixels - Ui.dp(120) - pitch));
-        content.addView(grid, MATCH, WRAP);
+        // The first row's cells start at FOCUS_Y; the bottom padding lets the last row scroll up there too.
+        content.setPadding(0, Ui.dp(FOCUS_Y) - Ui.dp(22), 0, dm.heightPixels);
+        int appW = Ui.dp(150), appH = Ui.dp(84.4f), gap = Ui.dp(16);
+        addRow(App.FAV, R.string.row_fav, favW, favH, Ui.dp(20));
+        sources = new Row(this, null, getString(R.string.row_sources), Ui.dp(150), Ui.dp(56), gap);
+        content.addView(sources, MATCH, WRAP);
+        addRow(App.STREAMING, R.string.row_streaming, appW, appH, gap);
+        addRow(App.TOOLS, R.string.row_tools, appW, appH, gap);
+        addRow(App.GAMES, R.string.row_games, appW, appH, gap);
+        addRow(App.OTHER, R.string.row_other, appW, appH, gap);
         scroll.addView(content, MATCH, WRAP);
         root.addView(scroll, MATCH, MATCH);
 
+        LinearLayout titleBox = new LinearLayout(this);
+        titleBox.setOrientation(LinearLayout.VERTICAL);
+        overline = Ui.text(this, Ui.medium, 12, 0x99FFFFFF);
+        overline.setLetterSpacing(0.14f);
+        overline.setAllCaps(true);
+        title = Ui.text(this, Ui.semibold, 34, 0xFFFFFFFF);
+        titleBox.addView(overline);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(WRAP, WRAP);
+        tl.topMargin = Ui.dp(6);
+        titleBox.addView(title, tl);
+        FrameLayout.LayoutParams bl = new FrameLayout.LayoutParams(WRAP, WRAP, Gravity.TOP | Gravity.START);
+        bl.leftMargin = side;
+        bl.topMargin = Ui.dp(30);
+        root.addView(titleBox, bl);
+
         topBar = new LinearLayout(this);
+        topBar.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
         topBar.setPadding(side, Ui.dp(28), side, 0);
         topBar.setClipChildren(false);
         topBar.setClipToPadding(false);
-        LinearLayout clockBox = new LinearLayout(this);
-        clockBox.setOrientation(LinearLayout.VERTICAL);
-        TextClock time = Ui.style(new TextClock(this), Ui.light, 38, 0xFFFFFFFF);
+        TextClock time = Ui.style(new TextClock(this), Ui.light, 24, 0xFFFFFFFF);
         time.setFormat24Hour("HH:mm");
         time.setFormat12Hour("h:mm");
         time.setFontFeatureSettings("tnum");
-        TextClock date = Ui.style(new TextClock(this), Ui.medium, 14, 0xB3FFFFFF);
-        date.setFormat24Hour("EEEE d MMMM");
-        date.setFormat12Hour("EEEE d MMMM");
-        LinearLayout.LayoutParams dl = new LinearLayout.LayoutParams(WRAP, WRAP);
-        dl.topMargin = Ui.dp(6);
-        clockBox.addView(time);
-        clockBox.addView(date, dl);
-        topBar.addView(clockBox, new LinearLayout.LayoutParams(0, WRAP, 1f));
-        inputsPill = pill(R.drawable.ic_input, getString(R.string.inputs), this::inputsMenu);
+        LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(WRAP, WRAP);
+        cl.rightMargin = Ui.dp(8);
+        topBar.addView(time, cl);
         GlassFrame wifiPill = pill(R.drawable.ic_wifi, getString(R.string.wifi),
                 () -> start(new Intent(Settings.ACTION_WIFI_SETTINGS), new Intent(Settings.ACTION_SETTINGS)));
         wifiIcon = (ImageView) wifiPill.getChildAt(0);
         wifiText = (TextView) wifiPill.getChildAt(1);
-        GlassFrame settingsPill = pill(R.drawable.ic_settings, null, () -> start(new Intent(Settings.ACTION_SETTINGS)));
-        topBar.addView(inputsPill);
         topBar.addView(wifiPill);
-        topBar.addView(settingsPill);
+        topBar.addView(pill(R.drawable.ic_settings, null, () -> start(new Intent(Settings.ACTION_SETTINGS))));
         root.addView(topBar, MATCH, WRAP);
 
         hint = new GlassFrame(this, backdrop, Ui.dp(20), true);
@@ -184,7 +208,16 @@ public final class Home extends Activity {
         f.addDataScheme("package");
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(packages, f, Context.RECEIVER_EXPORTED);
         else registerReceiver(packages, f);
+        tim = (TvInputManager) getSystemService(Context.TV_INPUT_SERVICE);
+        if (tim != null) tim.registerCallback(inputs, main);
+        buildSources();
         reload();
+    }
+
+    private void addRow(String cat, int name, int w, int h, int gap) {
+        Row r = new Row(this, cat, getString(name), w, h, gap);
+        rows.put(cat, r);
+        content.addView(r, MATCH, WRAP);
     }
 
     @Override
@@ -214,6 +247,7 @@ public final class Home extends Activity {
     protected void onDestroy() {
         artGen++;
         unregisterReceiver(packages);
+        if (tim != null) tim.unregisterCallback(inputs);
         super.onDestroy();
     }
 
@@ -223,10 +257,10 @@ public final class Home extends Activity {
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
         if (moving != null) {
             switch (k) {
-                case KeyEvent.KEYCODE_DPAD_LEFT: if (down) moveBy(-1); return true;
-                case KeyEvent.KEYCODE_DPAD_RIGHT: if (down) moveBy(1); return true;
-                case KeyEvent.KEYCODE_DPAD_UP: if (down) moveBy(-COLS); return true;
-                case KeyEvent.KEYCODE_DPAD_DOWN: if (down) moveBy(COLS); return true;
+                case KeyEvent.KEYCODE_DPAD_LEFT: if (down) moveWithin(-1); return true;
+                case KeyEvent.KEYCODE_DPAD_RIGHT: if (down) moveWithin(1); return true;
+                case KeyEvent.KEYCODE_DPAD_UP: if (down) moveAcross(-1); return true;
+                case KeyEvent.KEYCODE_DPAD_DOWN: if (down) moveAcross(1); return true;
                 case KeyEvent.KEYCODE_DPAD_CENTER:
                 case KeyEvent.KEYCODE_ENTER:
                 case KeyEvent.KEYCODE_BACK:
@@ -244,53 +278,110 @@ public final class Home extends Activity {
             }
             return true;
         }
-        if (down && k == KeyEvent.KEYCODE_DPAD_DOWN && topBar.hasFocus() && last != null && last.tile.getParent() == grid) {
-            last.tile.requestFocus();
+        if (down && k == KeyEvent.KEYCODE_DPAD_DOWN && topBar.hasFocus() && lastFocus != null && lastFocus.isAttachedToWindow()) {
+            lastFocus.requestFocus();
             return true;
+        }
+        if (down && (k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN) && panel == null) {
+            // Up/down always lands on the next row, on the cell closest across; Android's geometric search
+            // would skip a short row (Giochi has one app) for a better-aligned cell further down.
+            View f = getCurrentFocus();
+            if (f != null && f.getParent() instanceof Row) {
+                Row next = adjacentRow((Row) f.getParent(), k == KeyEvent.KEYCODE_DPAD_DOWN ? 1 : -1);
+                if (next != null) {
+                    nearest(next, f).requestFocus();
+                    return true;
+                }
+                if (k == KeyEvent.KEYCODE_DPAD_DOWN) return true; // last row: stay
+                // first row going up: the default search reaches the top bar
+            }
         }
         return super.dispatchKeyEvent(e);
     }
 
-    // ---- apps and grid ----
+    // ---- apps and rows ----
 
     private void reload() {
-        String focus = last != null ? last.pkg : null;
+        String focus = lastFocus instanceof Tile ? ((Tile) lastFocus).app.pkg : null;
         apps = App.load(this, prefs);
         for (App a : apps) a.tile = tile(a);
-        rebuildGrid(focus);
+        rebuildRows(focus);
         loadArt(++artGen);
     }
 
     private Tile tile(App a) {
-        Tile t = new Tile(this, a, tileW, tileH);
-        t.setOnClickListener(v -> launch(a, v));
+        Row r = rows.get(a.cat);
+        Tile t = new Tile(this, a, r.cellW, r.cellH);
+        t.setOnClickListener(v -> launch(v, a.launchIntent()));
         t.setOnLongClickListener(v -> {
             appMenu(a);
             return true;
         });
         t.setOnFocusChangeListener((v, f) -> {
-            if (f) focused(a);
+            if (f && !relocating) focusedTile(t);
         });
         return t;
     }
 
-    private void rebuildGrid(String focusPkg) {
-        grid.removeAllViews();
+    private void rebuildRows(String focusPkg) {
+        for (String cat : App.CATS) rows.get(cat).removeAllViews();
         Tile target = null;
         for (App a : apps) {
             if (a.hidden && !showHidden) continue;
+            Row r = rows.get(a.cat);
+            a.tile.setSize(r.cellW, r.cellH);
             a.tile.setAlpha(a.hidden ? 0.35f : 1f);
-            grid.addView(a.tile);
+            r.addView(a.tile);
             if (a.pkg.equals(focusPkg)) target = a.tile;
         }
-        if (target == null && grid.getChildCount() > 0) target = (Tile) grid.getChildAt(0);
-        if (target != null && panel == null) target.requestFocus();
+        for (String cat : App.CATS) {
+            Row r = rows.get(cat);
+            r.setVisibility(r.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        }
+        if (panel != null) return;
+        View f = target != null ? target : firstCell();
+        if (f != null) f.requestFocus();
+    }
+
+    private Row adjacentRow(Row r, int dir) {
+        for (int i = content.indexOfChild(r) + dir; i >= 0 && i < content.getChildCount(); i += dir) {
+            Row x = (Row) content.getChildAt(i);
+            if (x.getVisibility() == View.VISIBLE && x.getChildCount() > 0) return x;
+        }
+        return null;
+    }
+
+    /** The cell of {@code row} whose on-screen centre is horizontally closest to {@code from}'s. */
+    private View nearest(Row row, View from) {
+        int[] l = new int[2];
+        from.getLocationInWindow(l);
+        float cx = l[0] + from.getWidth() * from.getScaleX() / 2;
+        row.getLocationInWindow(l);
+        View best = row.getChildAt(0);
+        float bestD = Float.MAX_VALUE;
+        for (int i = 0; i < row.getChildCount(); i++) {
+            View c = row.getChildAt(i);
+            float d = Math.abs(l[0] + c.getLeft() - row.getScrollX() + c.getWidth() / 2f - cx);
+            if (d < bestD) {
+                bestD = d;
+                best = c;
+            }
+        }
+        return best;
+    }
+
+    private View firstCell() {
+        for (int i = 0; i < content.getChildCount(); i++) {
+            Row r = (Row) content.getChildAt(i);
+            if (r.getVisibility() == View.VISIBLE && r.getChildCount() > 0) return r.getChildAt(0);
+        }
+        return null;
     }
 
     private void loadArt(int gen) {
         final List<App> list = apps;
         final PackageManager pm = getPackageManager();
-        final int w = Math.round(tileW * Tile.FOCUSED), h = Math.round(tileH * Tile.FOCUSED);
+        final int w = Math.round(favW * Tile.FOCUSED), h = Math.round(favH * Tile.FOCUSED);
         new Thread(() -> {
             for (App a : list) {
                 if (gen != artGen) return;
@@ -302,28 +393,57 @@ public final class Home extends Activity {
                 }
                 main.post(() -> {
                     a.tile.setArt(art.bitmap, art.banner, art.ambient);
-                    if (a == last) backdrop.setAmbient(art.ambient);
+                    if (lastFocus == a.tile) backdrop.setAmbient(art.ambient);
                 });
             }
         }, "art").start();
     }
 
-    private void focused(App a) {
-        last = a;
-        if (!a.label.contentEquals(heroTitle.getText())) {
-            heroTitle.setText(a.label);
-            heroTitle.setAlpha(0f);
-            heroTitle.setTranslationY(Ui.dp(8));
-            heroTitle.animate().alpha(1f).translationY(0).setDuration(260)
-                    .setInterpolator(new DecelerateInterpolator()).start();
-        }
-        if (a.tile.ambient != null) backdrop.setAmbient(a.tile.ambient);
-        scrollToRow(grid.indexOfChild(a.tile) / COLS);
+    private void focusedTile(Tile t) {
+        lastFocus = t;
+        setTitle(rows.get(t.app.cat).title, t.app.label);
+        if (t.ambient != null) backdrop.setAmbient(t.ambient);
+        focusRow((Row) t.getParent(), t);
     }
 
-    private void scrollToRow(int row) {
-        topBar.setDescendantFocusability(row == 0 ? ViewGroup.FOCUS_AFTER_DESCENDANTS : ViewGroup.FOCUS_BLOCK_DESCENDANTS);
-        int y = row == 0 ? 0 : shelf + row * pitch - Ui.dp(120);
+    private void focusedCard(View card, CharSequence name) {
+        lastFocus = card;
+        setTitle(sources.title, name);
+        backdrop.setAmbient(null);
+        focusRow(sources, card);
+    }
+
+    private void setTitle(CharSequence row, CharSequence name) {
+        overline.setText(row);
+        if (name.toString().contentEquals(title.getText())) return;
+        title.setText(name);
+        title.setAlpha(0f);
+        title.setTranslationY(Ui.dp(8));
+        title.animate().alpha(1f).translationY(0).setDuration(260).setInterpolator(new DecelerateInterpolator()).start();
+    }
+
+    /** The focused row moves under the title; rows above it go away behind the title, the ones below show their names. */
+    private void focusRow(Row r, View child) {
+        r.reveal(child);
+        boolean seen = false, firstVisible = true, rowIsFirst = false;
+        for (int i = 0; i < content.getChildCount(); i++) {
+            Row x = (Row) content.getChildAt(i);
+            if (x.getVisibility() != View.VISIBLE) continue;
+            if (x == r) {
+                seen = true;
+                rowIsFirst = firstVisible;
+            }
+            firstVisible = false;
+            x.animate().alpha(seen ? 1f : 0f).setDuration(200).start();
+            x.showLabel(x != r);
+        }
+        topBar.setDescendantFocusability(rowIsFirst ? ViewGroup.FOCUS_AFTER_DESCENDANTS : ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        if (content.isLaidOut()) scrollToRow(r);
+        else content.post(() -> scrollToRow(r));
+    }
+
+    private void scrollToRow(Row r) {
+        int y = Math.max(0, r.getTop() + r.cellsTop() - Ui.dp(FOCUS_Y));
         if (y == scrollTarget && (scroll.getScrollY() == y || (scrollAnim != null && scrollAnim.isRunning()))) return;
         scrollTarget = y;
         if (scrollAnim != null) scrollAnim.cancel();
@@ -333,10 +453,10 @@ public final class Home extends Activity {
         scrollAnim.start();
     }
 
-    /** Clock and pills fade out and the backdrop dims as the grid scrolls over the Top Shelf. */
+    /** Clock and pills fade out and the backdrop dims as the rows scroll up. */
     private void chrome(int y) {
         if (moving == null) topBar.setAlpha(barAlpha(y));
-        backdrop.setDim(Math.min(1f, y / (float) Ui.dp(260)));
+        backdrop.setDim(Math.min(1f, y / (float) Ui.dp(260)) * 0.5f);
     }
 
     private float barAlpha(int y) {
@@ -344,17 +464,17 @@ public final class Home extends Activity {
     }
 
     private void toTop() {
-        if (last == null || last.tile.getParent() != grid) return;
-        int i = grid.indexOfChild(last.tile);
-        if (i >= COLS) grid.getChildAt(i % COLS).requestFocus();
+        View first = firstCell();
+        if (first == null) return;
+        ((Row) first.getParent()).scrollToX(0);
+        first.requestFocus();
     }
 
-    private void launch(App a, View v) {
-        ActivityOptions o = ActivityOptions.makeScaleUpAnimation(v, 0, 0, v.getWidth(), tileH);
+    private void launch(View v, Intent i) {
         try {
-            startActivity(a.launchIntent(), o.toBundle());
+            startActivity(i, ActivityOptions.makeScaleUpAnimation(v, 0, 0, v.getWidth(), v.getHeight()).toBundle());
         } catch (ActivityNotFoundException | SecurityException ignored) {
-            // uninstalled or disabled in the meantime; the package broadcast will refresh the grid
+            // uninstalled or disabled in the meantime; the package broadcast will refresh the rows
         }
     }
 
@@ -362,21 +482,21 @@ public final class Home extends Activity {
 
     private void appMenu(App a) {
         ArrayList<Item> items = new ArrayList<>();
-        items.add(new Item(R.drawable.ic_open_with, getString(R.string.move), null, () -> startMove(a)));
+        items.add(new Item(R.drawable.ic_open_with, getString(R.string.move), () -> startMove(a)));
         items.add(new Item(a.hidden ? R.drawable.ic_visibility : R.drawable.ic_visibility_off,
-                getString(a.hidden ? R.string.unhide : R.string.hide), null, () -> setHidden(a, !a.hidden)));
-        items.add(new Item(R.drawable.ic_info, getString(R.string.app_info), null,
+                getString(a.hidden ? R.string.unhide : R.string.hide), () -> setHidden(a, !a.hidden)));
+        items.add(new Item(R.drawable.ic_info, getString(R.string.app_info),
                 () -> start(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", a.pkg, null)))));
         int n = 0;
         for (App x : apps) if (x.hidden) n++;
         if (n > 0) {
             items.add(new Item(showHidden ? R.drawable.ic_visibility_off : R.drawable.ic_visibility,
-                    showHidden ? getString(R.string.hide_hidden) : getString(R.string.show_hidden, n), null, () -> {
+                    showHidden ? getString(R.string.hide_hidden) : getString(R.string.show_hidden, n), () -> {
                         showHidden = !showHidden;
-                        rebuildGrid(a.pkg);
+                        rebuildRows(a.pkg);
                     }));
         }
-        openMenu(a.tile, tileH * Tile.FOCUSED, false, items);
+        openMenu(a.tile, a.tile.tileHeight() * Tile.FOCUSED, items);
     }
 
     private void setHidden(App a, boolean h) {
@@ -387,11 +507,12 @@ public final class Home extends Activity {
         if (!any) showHidden = false;
         String focus = a.pkg;
         if (h && !showHidden) {
-            int i = grid.indexOfChild(a.tile);
-            View next = grid.getChildAt(i + 1 < grid.getChildCount() ? i + 1 : i - 1);
+            Row r = (Row) a.tile.getParent();
+            int i = r.indexOfChild(a.tile);
+            View next = r.getChildAt(i + 1 < r.getChildCount() ? i + 1 : i - 1);
             focus = next instanceof Tile ? ((Tile) next).app.pkg : null;
         }
-        rebuildGrid(focus);
+        rebuildRows(focus);
     }
 
     private void startMove(App a) {
@@ -407,68 +528,156 @@ public final class Home extends Activity {
         wiggle.setInterpolator(new LinearInterpolator());
         wiggle.addUpdateListener(v -> {
             float p = (float) v.getAnimatedValue();
-            for (int i = 0; i < grid.getChildCount(); i++) {
-                View c = grid.getChildAt(i);
-                c.setRotation(c == a.tile ? 0f : 1.2f * (float) Math.sin(p + i * 1.9f));
+            int n = 0;
+            for (String cat : App.CATS) {
+                Row r = rows.get(cat);
+                for (int i = 0; i < r.getChildCount(); i++, n++) {
+                    View c = r.getChildAt(i);
+                    c.setRotation(c == a.tile ? 0f : 1.2f * (float) Math.sin(p + n * 1.9f));
+                }
             }
         });
         wiggle.start();
     }
 
-    private void moveBy(int d) {
+    private void moveWithin(int d) {
         Tile t = moving.tile;
-        int from = grid.indexOfChild(t), to = from + d;
-        if (to < 0 || to >= grid.getChildCount()) return;
-        App target = ((Tile) grid.getChildAt(to)).app;
+        Row r = (Row) t.getParent();
+        int from = r.indexOfChild(t), to = from + d;
+        if (to < 0 || to >= r.getChildCount()) return;
+        App target = ((Tile) r.getChildAt(to)).app;
         apps.remove(moving);
         apps.add(apps.indexOf(target) + (d > 0 ? 1 : 0), moving);
-        grid.move(from, to);
-        scrollToRow(to / COLS);
+        r.move(from, to);
+        r.reveal(t);
+    }
+
+    /** Moves the app to the next category row up or down, under the column it left (or at the end of a shorter row). */
+    private void moveAcross(int d) {
+        Tile t = moving.tile;
+        int ci = App.CATS.indexOf(moving.cat) + d;
+        if (ci < 0 || ci >= App.CATS.size()) return;
+        Row from = (Row) t.getParent(), to = rows.get(App.CATS.get(ci));
+        int at = Math.min(from.indexOfChild(t), to.getChildCount());
+        App before = at < to.getChildCount() ? ((Tile) to.getChildAt(at)).app : null;
+        apps.remove(moving);
+        moving.cat = to.cat;
+        if (before != null) apps.add(apps.indexOf(before), moving);
+        else apps.add(moving); // rows filter by category, so the end of the list is the end of the row
+
+        int[] was = new int[2];
+        t.getLocationInWindow(was);
+        relocating = true; // removing the focused view hands focus around; none of that is a real focus change
+        from.removeView(t);
+        t.setSize(to.cellW, to.cellH);
+        to.addView(t, at);
+        to.setVisibility(View.VISIBLE);
+        if (from.getChildCount() == 0) from.setVisibility(View.GONE);
+        t.requestFocus();
+        relocating = false;
+        focusedTile(t);
+        t.getViewTreeObserver().addOnPreDrawListener(new ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                t.getViewTreeObserver().removeOnPreDrawListener(this);
+                int[] now = new int[2];
+                t.getLocationInWindow(now);
+                t.setTranslationX(was[0] - now[0]);
+                t.setTranslationY(was[1] - now[1]);
+                t.animate().translationX(0).translationY(0).setInterpolator(Ui.FOCUS).setDuration(450).start();
+                return true;
+            }
+        });
     }
 
     private void endMove() {
         Tile t = moving.tile;
         moving = null;
         wiggle.cancel();
-        for (int i = 0; i < grid.getChildCount(); i++) grid.getChildAt(i).setRotation(0f);
+        for (String cat : App.CATS) {
+            Row r = rows.get(cat);
+            for (int i = 0; i < r.getChildCount(); i++) r.getChildAt(i).setRotation(0f);
+        }
         t.setLifted(false);
         App.save(prefs, apps);
         hint.animate().alpha(0f).setDuration(200).withEndAction(() -> hint.setVisibility(View.GONE)).start();
         topBar.animate().alpha(barAlpha(scroll.getScrollY())).setDuration(200).start();
     }
 
-    // ---- inputs and network ----
+    // ---- inputs row and network ----
 
-    private void inputsMenu() {
-        ArrayList<Item> items = new ArrayList<>();
-        TvInputManager tim = (TvInputManager) getSystemService(Context.TV_INPUT_SERVICE);
-        if (tim == null) return;
-        ArrayList<TvInputInfo> inputs = new ArrayList<>(), tuners = new ArrayList<>();
-        for (TvInputInfo in : tim.getTvInputList()) {
-            if (in.getParentId() != null || in.isHidden(this)) continue;
-            if (isPhysical(in.getType())) inputs.add(in);
-            else if (in.getType() == TvInputInfo.TYPE_TUNER) tuners.add(in);
+    private void buildSources() {
+        String focusedId = sources.hasFocus() ? (String) sources.findFocus().getTag() : null;
+        sources.removeAllViews();
+        inputStatus.clear();
+        if (tim != null) {
+            ArrayList<TvInputInfo> inputs = new ArrayList<>(), tuners = new ArrayList<>();
+            for (TvInputInfo in : tim.getTvInputList()) {
+                if (in.getParentId() != null || in.isHidden(this)) continue;
+                if (isPhysical(in.getType())) inputs.add(in);
+                else if (in.getType() == TvInputInfo.TYPE_TUNER) tuners.add(in);
+            }
+            inputs.sort((x, y) -> label(x).toString().compareTo(label(y).toString()));
+            for (TvInputInfo in : inputs) sources.addView(card(in, label(in), false));
+            // Firmwares register AirPlay and the dead analogue tuner as tuners too; the broadcast tuner is
+            // the one that can record. The same VIEW intent on it makes Live TV switch to the aerial.
+            ArrayList<TvInputInfo> broadcast = new ArrayList<>();
+            for (TvInputInfo in : tuners) if (in.canRecord()) broadcast.add(in);
+            if (!broadcast.isEmpty()) tuners = broadcast;
+            for (TvInputInfo in : tuners) {
+                sources.addView(card(in, tuners.size() == 1 ? getString(R.string.live_tv) : label(in), true));
+            }
         }
-        inputs.sort((x, y) -> label(x).toString().compareTo(label(y).toString()));
-        for (TvInputInfo in : inputs) {
-            int s = tim.getInputState(in.getId());
-            int sub = s == TvInputManager.INPUT_STATE_CONNECTED ? R.string.input_connected
-                    : s == TvInputManager.INPUT_STATE_CONNECTED_STANDBY ? R.string.input_standby : R.string.input_disconnected;
-            items.add(new Item(R.drawable.ic_input, label(in), getString(sub), () -> watch(in)));
+        sources.setVisibility(sources.getChildCount() > 0 ? View.VISIBLE : View.GONE);
+        if (focusedId != null) {
+            View again = sources.findViewWithTag(focusedId);
+            (again != null ? again : firstCell()).requestFocus();
         }
-        // Firmwares register AirPlay and the dead analogue tuner as tuners too; the broadcast tuner is
-        // the one that can record. The same VIEW intent on it makes Live TV switch to the aerial.
-        ArrayList<TvInputInfo> broadcast = new ArrayList<>();
-        for (TvInputInfo in : tuners) if (in.canRecord()) broadcast.add(in);
-        if (!broadcast.isEmpty()) tuners = broadcast;
-        for (TvInputInfo in : tuners) {
-            items.add(new Item(R.drawable.ic_tv, tuners.size() == 1 ? getString(R.string.live_tv) : label(in), null, () -> watch(in)));
-        }
-        openMenu(inputsPill, inputsPill.getHeight(), true, items);
     }
 
-    private void watch(TvInputInfo in) {
-        start(new Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(in.getId())));
+    private GlassFrame card(TvInputInfo in, CharSequence name, boolean tuner) {
+        GlassFrame c = new GlassFrame(this, backdrop, Ui.dp(14), true);
+        c.setTag(in.getId());
+        c.setGravity(Gravity.CENTER_VERTICAL);
+        c.setPadding(Ui.dp(14), 0, Ui.dp(10), 0);
+        c.setFocusable(true);
+        c.setOnClickListener(v -> start(new Intent(Intent.ACTION_VIEW, TvContract.buildChannelUriForPassthroughInput(in.getId()))));
+        c.setOnFocusChangeListener((v, f) -> {
+            if (f && !relocating) focusedCard(c, name);
+        });
+        ImageView iv = new ImageView(this);
+        iv.setImageResource(tuner ? R.drawable.ic_tv : R.drawable.ic_input);
+        iv.setImageTintList(ColorStateList.valueOf(GlassFrame.LIGHT));
+        c.addView(iv, Ui.dp(20), Ui.dp(20));
+        LinearLayout texts = new LinearLayout(this);
+        texts.setOrientation(LinearLayout.VERTICAL);
+        TextView n = Ui.text(this, Ui.medium, 15, GlassFrame.LIGHT);
+        n.setText(name);
+        TextView s = Ui.text(this, Ui.medium, 12, 0x99FFFFFF);
+        if (tuner) s.setText(R.string.antenna);
+        else {
+            inputStatus.put(in.getId(), s);
+            setStatus(s, tim.getInputState(in.getId()));
+        }
+        texts.addView(n);
+        LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(WRAP, WRAP);
+        sl.topMargin = Ui.dp(2);
+        texts.addView(s, sl);
+        LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(WRAP, WRAP);
+        tl.leftMargin = Ui.dp(12);
+        c.addView(texts, tl);
+        return c;
+    }
+
+    private void setStatus(TextView s, int state) {
+        boolean on = state == TvInputManager.INPUT_STATE_CONNECTED, standby = state == TvInputManager.INPUT_STATE_CONNECTED_STANDBY;
+        s.setText(on ? R.string.input_connected : standby ? R.string.input_standby : R.string.input_disconnected);
+        GradientDrawable dot = new GradientDrawable();
+        dot.setShape(GradientDrawable.OVAL);
+        dot.setColor(on ? 0xFF34D399 : standby ? 0xFFFCD34D : 0x59FFFFFF);
+        dot.setSize(Ui.dp(7), Ui.dp(7));
+        s.setCompoundDrawablesWithIntrinsicBounds(dot, null, null, null);
+        s.setCompoundDrawablePadding(Ui.dp(5));
     }
 
     private static boolean isPhysical(int type) {
@@ -540,21 +749,19 @@ public final class Home extends Activity {
 
     private static final class Item {
         final int icon;
-        final CharSequence text, sub;
+        final CharSequence text;
         final Runnable run;
 
-        Item(int icon, CharSequence text, CharSequence sub, Runnable run) {
+        Item(int icon, CharSequence text, Runnable run) {
             this.icon = icon;
             this.text = text;
-            this.sub = sub;
             this.run = run;
         }
     }
 
     /** A glass menu under (or above) the anchor; everything else stops taking focus until it closes. */
-    private void openMenu(View anchor, float anchorH, boolean alignRight, List<Item> items) {
+    private void openMenu(View anchor, float anchorH, List<Item> items) {
         closeMenu();
-        if (items.isEmpty()) return;
         menuAnchor = anchor;
         panel = new GlassFrame(this, backdrop, Ui.dp(22), true);
         panel.setOrientation(LinearLayout.VERTICAL);
@@ -575,32 +782,22 @@ public final class Home extends Activity {
             iv.setImageResource(it.icon);
             iv.setImageTintList(ColorStateList.valueOf(GlassFrame.LIGHT));
             row.addView(iv, Ui.dp(20), Ui.dp(20));
-            LinearLayout texts = new LinearLayout(this);
-            texts.setOrientation(LinearLayout.VERTICAL);
             TextView t = Ui.text(this, Ui.medium, 16, GlassFrame.LIGHT);
             t.setText(it.text);
-            texts.addView(t);
-            if (it.sub != null) {
-                TextView s = Ui.text(this, Ui.medium, 12, 0x99FFFFFF);
-                s.setText(it.sub);
-                LinearLayout.LayoutParams sl = new LinearLayout.LayoutParams(WRAP, WRAP);
-                sl.topMargin = Ui.dp(3);
-                texts.addView(s, sl);
-            }
             LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(WRAP, WRAP);
             tl.leftMargin = Ui.dp(12);
-            row.addView(texts, tl);
+            row.addView(t, tl);
             panel.addView(row, MATCH, WRAP);
         }
 
         panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
         int pw = panel.getMeasuredWidth(), ph = panel.getMeasuredHeight();
         int sw = backdrop.getWidth(), sh = backdrop.getHeight(); // the overlay is GONE until now, so 0x0
+        int side = Ui.dp(48);
         int[] l = new int[2];
         anchor.getLocationInWindow(l);
         float aw = anchor.getWidth() * anchor.getScaleX();
-        int x = Math.round(alignRight ? l[0] + aw - pw : l[0] + aw / 2 - pw / 2f);
-        x = Math.max(side, Math.min(sw - side - pw, x));
+        int x = Math.max(side, Math.min(sw - side - pw, Math.round(l[0] + aw / 2 - pw / 2f)));
         int y = Math.round(l[1] + anchorH + Ui.dp(14));
         boolean below = y + ph <= sh - Ui.dp(20);
         if (!below) y = Math.max(Ui.dp(20), l[1] - ph - Ui.dp(14));
@@ -629,8 +826,7 @@ public final class Home extends Activity {
         panel = null;
         overlay.setVisibility(View.GONE);
         scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        topBar.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
+        // Focusing the anchor again runs focusRow, which also restores whether the top bar can take focus.
         if (menuAnchor != null && menuAnchor.isAttachedToWindow()) menuAnchor.requestFocus();
-        if (last != null && last.tile.getParent() == grid && last.tile.hasFocus()) scrollToRow(grid.indexOfChild(last.tile) / COLS);
     }
 }

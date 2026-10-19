@@ -76,13 +76,14 @@ class GlassFrame extends LinearLayout {
         float half = rim.getStrokeWidth() / 2;
         r.set(half, half, getWidth() - half, getHeight() - half);
         if (sample && !bright) {
-            // Untransformed position: the parent's window position plus our offset, so a focus zoom
-            // magnifies the glass a little instead of sliding it.
-            ((View) getParent()).getLocationInWindow(loc);
+            // Untransformed position: the parent's window position plus our offset (minus its scroll, for
+            // cards in a scrolled row), so a focus zoom magnifies the glass a little instead of sliding it.
+            View p = (View) getParent();
+            p.getLocationInWindow(loc);
             backdrop.getLocationInWindow(bloc);
             float sx = (float) backdrop.getWidth() / Backdrop.GW, sy = (float) backdrop.getHeight() / Backdrop.GH;
             m.setScale(sx, sy);
-            m.postTranslate(bloc[0] - loc[0] - getLeft(), bloc[1] - loc[1] - getTop());
+            m.postTranslate(bloc[0] - loc[0] - getLeft() + p.getScrollX(), bloc[1] - loc[1] - getTop() + p.getScrollY());
             glass.getShader().setLocalMatrix(m);
             c.drawRoundRect(r, radius, radius, glass);
         }

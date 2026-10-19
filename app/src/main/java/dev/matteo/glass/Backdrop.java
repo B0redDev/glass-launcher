@@ -97,7 +97,8 @@ final class Backdrop extends View {
         if (wall == null) return;
         c.drawBitmap(wall, null, r, bmp);
         if (from != null) {
-            bmp.setAlpha((int) (255 * AMBIENT));
+            // Fading to no ambience (an input is focused): the old one fades out instead of being covered.
+            bmp.setAlpha((int) (255 * AMBIENT * (to == null ? 1 - mix : 1)));
             c.drawBitmap(from, null, r, bmp);
         }
         if (to != null) {
