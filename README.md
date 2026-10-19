@@ -52,7 +52,7 @@ Non fatto di proposito. Quando vorrai, su questo firmware (Xiaomi V816, Google T
 disattivare l'override Home di Projectivy (sue impostazioni), poi
 `pm disable-user --user 0 com.google.android.tungsten.setupwraith` e
 `pm disable-user --user 0 com.google.android.apps.tv.launcherx`
-(vedi `~/cleanyourtv/examples/xiaomi-tv-a-pro-2026/debloat.txt` per il perché e il ripristino).
+(vedi [CleanYourTV, `xiaomi-tv-a-pro-2026/debloat.txt`](https://github.com/Gathin23/cleanyourtv/blob/main/examples/xiaomi-tv-a-pro-2026/debloat.txt) per il perché e il ripristino).
 
 ## File
 
@@ -66,6 +66,5 @@ disattivare l'override Home di Projectivy (sue impostazioni), poi
 | `App.java` | Elenco app, riga di partenza, righe/ordine/nascoste salvati, caricamento banner |
 | `ClockDream.java` | Salvaschermo orologio |
 
-Design approvato: `/tmp/design-proposal/glass-home/final.html` (variante C · Righe).
-
-Font: Inter (SIL OFL, `FONT-LICENSE-OFL.txt`), ridotto ai caratteri latini. Icone: Material Symbols Rounded (Apache 2.0).
+Font: Inter (SIL OFL, `FONT-LICENSE-OFL.txt`), ridotto ai caratteri latini. Icone: Material Symbols Rounded
+(Apache 2.0, `ICONS-LICENSE-APACHE.txt`).
