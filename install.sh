@@ -16,7 +16,6 @@ APK=app/build/outputs/apk/release/app-release.apk
 "$ADB" -s "$TV" push "$APK" /data/local/tmp/glass.apk >/dev/null
 "$ADB" -s "$TV" shell pm install -r /data/local/tmp/glass.apk
 "$ADB" -s "$TV" shell rm /data/local/tmp/glass.apk
-"$ADB" -s "$TV" shell pm grant io.github.b0reddev.glass android.permission.ACCESS_FINE_LOCATION   # SSID in the Wi-Fi pill
 "$ADB" -s "$TV" shell cmd package compile -m speed -f io.github.b0reddev.glass >/dev/null
 "$ADB" -s "$TV" shell am start -W -n io.github.b0reddev.glass/.Home | grep -E '^(Status|TotalTime)'
 ls -l "$APK" | awk '{print "APK:", $5, "bytes"}'

@@ -12,9 +12,8 @@ translation.
 TV=<tv-ip>:5555 ./install.sh
 ```
 
-The script builds a release APK, installs it with `pm install` over ADB, grants location (only used to show
-the Wi-Fi network name) and opens Glass. It does not change the TV's Home: until you do, the Home button
-still goes to the current launcher.
+The script builds a release APK, installs it with `pm install` over ADB and opens Glass. It does not change
+the TV's Home: until you do, the Home button still goes to the current launcher.
 
 Requirements: ADB debugging enabled on the TV, JDK 17 (`JAVA_HOME`, default `~/opt/jdk-17*`), Android SDK
 platform 34 (`ANDROID_HOME`, default `~/Android/Sdk`), `adb` (`ADB`, default `~/platform-tools/adb`).

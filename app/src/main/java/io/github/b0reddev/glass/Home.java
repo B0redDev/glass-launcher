@@ -19,7 +19,6 @@ import android.media.tv.TvInputManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkCapabilities;
 import android.net.Uri;
-import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
@@ -62,8 +61,9 @@ public final class Home extends Activity {
     private ScrollView scroll;
     private LinearLayout content, topBar;
     private Row sources;
-    private TextView overline, title, wifiText;
-    private ImageView wifiIcon;
+    private TextView overline, title;
+    private GlassFrame netPill;
+    private ImageView netIcon;
     private GlassFrame hint, panel;
     private FrameLayout overlay;
     private View scrim, menuAnchor, lastFocus;
@@ -173,11 +173,11 @@ public final class Home extends Activity {
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(WRAP, WRAP);
         cl.rightMargin = Ui.dp(8);
         topBar.addView(time, cl);
-        GlassFrame wifiPill = pill(R.drawable.ic_wifi, getString(R.string.wifi),
+        // Icon only: Wi-Fi, Ethernet or offline. The state's name is kept for screen readers.
+        netPill = pill(R.drawable.ic_wifi, null,
                 () -> start(new Intent(Settings.ACTION_WIFI_SETTINGS), new Intent(Settings.ACTION_SETTINGS)));
-        wifiIcon = (ImageView) wifiPill.getChildAt(0);
-        wifiText = (TextView) wifiPill.getChildAt(1);
-        topBar.addView(wifiPill);
+        netIcon = (ImageView) netPill.getChildAt(0);
+        topBar.addView(netPill);
         topBar.addView(pill(R.drawable.ic_settings, null, () -> start(new Intent(Settings.ACTION_SETTINGS))));
         root.addView(topBar, MATCH, WRAP);
 
@@ -694,20 +694,19 @@ public final class Home extends Activity {
     private void refreshNetwork() {
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
         NetworkCapabilities nc = cm == null ? null : cm.getNetworkCapabilities(cm.getActiveNetwork());
+        int icon, name;
         if (nc == null) {
-            wifiIcon.setImageResource(R.drawable.ic_wifi_off);
-            wifiText.setText(R.string.offline);
+            icon = R.drawable.ic_wifi_off;
+            name = R.string.offline;
         } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
-            wifiIcon.setImageResource(R.drawable.ic_lan);
-            wifiText.setText(R.string.ethernet);
+            icon = R.drawable.ic_lan;
+            name = R.string.ethernet;
         } else {
-            wifiIcon.setImageResource(R.drawable.ic_wifi);
-            WifiManager wm = getApplicationContext().getSystemService(WifiManager.class);
-            @SuppressWarnings("deprecation")
-            String ssid = wm == null ? null : wm.getConnectionInfo().getSSID();
-            boolean known = ssid != null && ssid.length() > 2 && ssid.startsWith("\"");
-            wifiText.setText(known ? ssid.substring(1, ssid.length() - 1) : getString(R.string.wifi));
+            icon = R.drawable.ic_wifi;
+            name = R.string.wifi;
         }
+        netIcon.setImageResource(icon);
+        netPill.setContentDescription(getString(name));
     }
 
     private void start(Intent... candidates) {
