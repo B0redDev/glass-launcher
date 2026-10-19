@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="dream_name">Glass · Orologio</string>
+    <string name="move">Sposta</string>
+    <string name="hide">Nascondi</string>
+    <string name="unhide">Mostra</string>
+    <string name="app_info">Info app</string>
+    <string name="show_hidden">Mostra app nascoste (%d)</string>
+    <string name="hide_hidden">Nascondi app nascoste</string>
+    <string name="move_hint">←/→ riordina · ↑/↓ cambia riga · OK conferma</string>
+
+    <string name="row_fav">Preferite</string>
+    <string name="row_sources">Sorgenti</string>
+    <string name="row_streaming">Streaming e TV</string>
+    <string name="row_tools">Strumenti</string>
+    <string name="row_games">Giochi</string>
+    <string name="row_other">Altro</string>
+
+    <string name="input_connected">Collegato</string>
+    <string name="input_standby">In standby</string>
+    <string name="input_disconnected">Libero</string>
+</resources>

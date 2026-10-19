@@ -1,4 +1,4 @@
-package dev.matteo.glass;
+package io.github.b0reddev.glass;
 
 import android.animation.TimeInterpolator;
 import android.content.Context;

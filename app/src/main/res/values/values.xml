@@ -1,29 +1,29 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Glass</string>
-    <string name="dream_name">Glass · Orologio</string>
+    <string name="dream_name">Glass · Clock</string>
     <string name="ethernet">Ethernet</string>
     <string name="offline">Offline</string>
     <string name="wifi">Wi-Fi</string>
-    <string name="move">Sposta</string>
-    <string name="hide">Nascondi</string>
-    <string name="unhide">Mostra</string>
-    <string name="app_info">Info app</string>
-    <string name="show_hidden">Mostra app nascoste (%d)</string>
-    <string name="hide_hidden">Nascondi app nascoste</string>
-    <string name="move_hint">←/→ riordina · ↑/↓ cambia riga · OK conferma</string>
+    <string name="move">Move</string>
+    <string name="hide">Hide</string>
+    <string name="unhide">Show</string>
+    <string name="app_info">App info</string>
+    <string name="show_hidden">Show hidden apps (%d)</string>
+    <string name="hide_hidden">Hide hidden apps</string>
+    <string name="move_hint">←/→ reorder · ↑/↓ change row · OK done</string>
 
     <!-- Rows, top to bottom; the order matches App.CATS with the inputs row second. -->
-    <string name="row_fav">Preferite</string>
-    <string name="row_sources">Sorgenti</string>
-    <string name="row_streaming">Streaming e TV</string>
-    <string name="row_tools">Strumenti</string>
-    <string name="row_games">Giochi</string>
-    <string name="row_other">Altro</string>
+    <string name="row_fav">Favourites</string>
+    <string name="row_sources">Inputs</string>
+    <string name="row_streaming">Streaming &amp; TV</string>
+    <string name="row_tools">Tools</string>
+    <string name="row_games">Games</string>
+    <string name="row_other">Other</string>
 
-    <string name="input_connected">Collegato</string>
-    <string name="input_standby">In standby</string>
-    <string name="input_disconnected">Libero</string>
+    <string name="input_connected">Connected</string>
+    <string name="input_standby">Standby</string>
+    <string name="input_disconnected">Not connected</string>
     <string name="live_tv">TV</string>
     <string name="antenna">Antenna</string>
 

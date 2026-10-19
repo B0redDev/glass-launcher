@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Build Glass and install it on the TV as a normal app (Home stays as it is).
-# Usage: ./install.sh            TV=192.168.0.26:5555 by default
+# Usage: TV=<tv-ip>:5555 ./install.sh
 set -euo pipefail
 cd "$(dirname "$0")"
-TV="${TV:-192.168.0.26:5555}"
+TV="${TV:?set TV to the TV address, e.g. TV=192.168.1.50:5555 $0}"
 ADB="${ADB:-$HOME/platform-tools/adb}"
 export JAVA_HOME="${JAVA_HOME:-$(ls -d "$HOME"/opt/jdk-17* | head -1)}"
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
@@ -16,7 +16,7 @@ APK=app/build/outputs/apk/release/app-release.apk
 "$ADB" -s "$TV" push "$APK" /data/local/tmp/glass.apk >/dev/null
 "$ADB" -s "$TV" shell pm install -r /data/local/tmp/glass.apk
 "$ADB" -s "$TV" shell rm /data/local/tmp/glass.apk
-"$ADB" -s "$TV" shell pm grant dev.matteo.glass android.permission.ACCESS_FINE_LOCATION   # SSID in the Wi-Fi pill
-"$ADB" -s "$TV" shell cmd package compile -m speed -f dev.matteo.glass >/dev/null
-"$ADB" -s "$TV" shell am start -W -n dev.matteo.glass/.Home | grep -E '^(Status|TotalTime)'
+"$ADB" -s "$TV" shell pm grant io.github.b0reddev.glass android.permission.ACCESS_FINE_LOCATION   # SSID in the Wi-Fi pill
+"$ADB" -s "$TV" shell cmd package compile -m speed -f io.github.b0reddev.glass >/dev/null
+"$ADB" -s "$TV" shell am start -W -n io.github.b0reddev.glass/.Home | grep -E '^(Status|TotalTime)'
 ls -l "$APK" | awk '{print "APK:", $5, "bytes"}'

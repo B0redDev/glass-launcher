@@ -1,70 +1,83 @@
 # Glass
 
-Launcher per Android TV in stile tvOS 26 (Liquid Glass). Java + View di sistema, nessuna dipendenza: APK ~100 KB.
+An Android TV launcher in the style of tvOS 26 (Liquid Glass). Plain Java and framework Views with no
+dependencies, so the APK is about 100 KB.
 
-## Installare / aggiornare
+Built and tested on a Xiaomi MiTV-MOEU0 (Google TV 14, 1920×1080, 2.4 GB RAM). English UI with an Italian
+translation.
 
-```bash
-./install.sh                 # TV=192.168.0.26:5555 di default; TV=<ip>:5555 ./install.sh per un'altra
-```
-
-Compila, installa con `pm install`, concede la posizione (serve solo per mostrare il nome della rete Wi-Fi)
-e apre Glass. Non tocca la Home: finché non la cambi, il tasto Home porta ancora a Projectivy.
-
-Requisiti sul PC: JDK 17 in `~/opt/jdk-17*`, Android SDK in `~/Android/Sdk`, adb in `~/platform-tools`.
-
-## Home a righe
-
-Dall'alto: **Preferite** (grandi), **Sorgenti** (HDMI con stato e TV antenna, sempre presente), poi
-**Streaming e TV**, **Strumenti**, **Giochi**, **Altro**. Le righe vuote non si vedono. La riga a fuoco sale
-sempre sotto il titolo (nome della riga + nome dell'app); quelle sopra spariscono, ora e pulsanti in alto
-restano solo sulla prima.
-
-Ogni app sta in una sola riga. Al primo avvio le app note partono nella riga scelta nella proposta di
-design (`App.START`); le altre vanno in Streaming se dichiarano "video", in Giochi se dichiarano "gioco",
-altrimenti in Altro. Da lì decidi tu con Sposta.
-
-| Telecomando | Effetto |
-|---|---|
-| ←/→ | Scorre la riga |
-| ↑/↓ | Riga sopra/sotto, sull'elemento più vicino; ↑ dalla prima riga va a Wi-Fi e Impostazioni |
-| OK | Apre l'app, o passa all'ingresso HDMI / TV |
-| OK tenuto premuto | Menu: Sposta, Nascondi / Mostra, Info app, Mostra app nascoste |
-| Sposta → ←/→ | Riordina nella riga (le icone oscillano) |
-| Sposta → ↑/↓ | Porta l'app nella riga sopra/sotto (cambia categoria) |
-| Sposta → OK / Indietro | Conferma |
-| Indietro / Home su Glass | Torna all'inizio della prima riga |
-
-Righe, ordine e app nascoste restano salvati nell'app (si perdono solo disinstallandola).
-
-## Salvaschermo
-
-Impostazioni della TV → Sistema → Salvaschermo → "Glass · Orologio", oppure:
+## Install / update
 
 ```bash
-adb shell settings put secure screensaver_components dev.matteo.glass/.ClockDream
-adb shell settings delete secure screensaver_components     # torna a quello di Google
+TV=<tv-ip>:5555 ./install.sh
 ```
 
-## Renderlo la Home
+The script builds a release APK, installs it with `pm install` over ADB, grants location (only used to show
+the Wi-Fi network name) and opens Glass. It does not change the TV's Home: until you do, the Home button
+still goes to the current launcher.
 
-Non fatto di proposito. Quando vorrai, su questo firmware (Xiaomi V816, Google TV 14) servirà:
-disattivare l'override Home di Projectivy (sue impostazioni), poi
-`pm disable-user --user 0 com.google.android.tungsten.setupwraith` e
-`pm disable-user --user 0 com.google.android.apps.tv.launcherx`
-(vedi [CleanYourTV, `xiaomi-tv-a-pro-2026/debloat.txt`](https://github.com/Gathin23/cleanyourtv/blob/main/examples/xiaomi-tv-a-pro-2026/debloat.txt) per il perché e il ripristino).
+Requirements: ADB debugging enabled on the TV, JDK 17 (`JAVA_HOME`, default `~/opt/jdk-17*`), Android SDK
+platform 34 (`ANDROID_HOME`, default `~/Android/Sdk`), `adb` (`ADB`, default `~/platform-tools/adb`).
 
-## File
+## Home in rows
 
-| File | Cosa fa |
+Top to bottom: **Favourites** (large), **Inputs** (HDMI ports with live status, plus the aerial tuner;
+always shown), then **Streaming & TV**, **Tools**, **Games** and **Other**. Empty rows are hidden. The focused
+row always moves under the title (row name + app name); the rows above it fade away, and the clock and
+buttons are only shown on the first row.
+
+Each app sits in exactly one row. On first launch, known apps start in the row listed in `App.START`; any
+other app goes to Streaming & TV if it declares the "video" category, to Games if it declares "game", and to
+Other otherwise. After that you decide with Move.
+
+| Remote | Action |
 |---|---|
-| `Home.java` | Activity: righe, focus e scorrimento, menu, sposta/nascondi, riga Sorgenti, rete |
-| `Row.java` | Una riga: nome, celle, scorrimento orizzontale, animazione di riordino |
-| `Backdrop.java` | Sfondo aurora + alone dell'app a fuoco + copia sfocata per il vetro |
-| `GlassFrame.java` | Pannello Liquid Glass (pulsanti, card delle sorgenti, menu) |
-| `Tile.java` | Banner dell'app: angoli arrotondati, zoom, riflesso |
-| `App.java` | Elenco app, riga di partenza, righe/ordine/nascoste salvati, caricamento banner |
-| `ClockDream.java` | Salvaschermo orologio |
+| ←/→ | Scroll the row |
+| ↑/↓ | Row above/below, on the closest item; ↑ from the first row reaches Wi-Fi and Settings |
+| OK | Open the app, or switch to the HDMI input / aerial |
+| Hold OK | Menu: Move, Hide / Show, App info, Show hidden apps |
+| Move → ←/→ | Reorder within the row (the tiles wiggle) |
+| Move → ↑/↓ | Move the app to the row above/below (changes its category) |
+| Move → OK / Back | Done |
+| Back / Home while on Glass | Back to the start of the first row |
 
-Font: Inter (SIL OFL, `FONT-LICENSE-OFL.txt`), ridotto ai caratteri latini. Icone: Material Symbols Rounded
-(Apache 2.0, `ICONS-LICENSE-APACHE.txt`).
+Rows, order and hidden apps are saved in the app's preferences (lost only when uninstalling it).
+
+## Screensaver
+
+TV Settings → System → Screensaver → "Glass · Clock", or:
+
+```bash
+adb shell settings put secure screensaver_components io.github.b0reddev.glass/.ClockDream
+adb shell settings delete secure screensaver_components     # back to Google's
+```
+
+## Making it the Home app
+
+Not done by the install script on purpose. On Google TV 14 the Home intent is resolved by priority and the
+stock launcher wins, so you need to disable it, plus the setup wizard, which otherwise takes over Home and
+crash-loops the system:
+
+```bash
+adb shell pm disable-user --user 0 com.google.android.tungsten.setupwraith
+adb shell pm disable-user --user 0 com.google.android.apps.tv.launcherx
+```
+
+`pm enable` on both undoes it. If another launcher overrides Home through an accessibility service (e.g.
+Projectivy), turn that off in its settings first. Background: [CleanYourTV's notes for a similar
+Xiaomi](https://github.com/Gathin23/cleanyourtv/blob/main/examples/xiaomi-tv-a-pro-2026/debloat.txt).
+
+## Source
+
+| File | What it does |
+|---|---|
+| `Home.java` | Activity: rows, focus and scrolling, menus, move/hide, inputs row, network pill |
+| `Row.java` | One row: name, cells, horizontal scroll, reorder animation |
+| `Backdrop.java` | Aurora background + ambience of the focused app + blurred copy that glass panels sample |
+| `GlassFrame.java` | Liquid Glass panel (buttons, input cards, menus) |
+| `Tile.java` | App banner: rounded corners, focus zoom, gloss sweep |
+| `App.java` | Installed apps, starting rows, saved rows/order/hidden apps, banner loading |
+| `ClockDream.java` | Clock screensaver |
+
+Fonts: Inter (SIL Open Font License, `FONT-LICENSE-OFL.txt`), subset to Latin. Icons: Material Symbols
+Rounded (Apache 2.0, `ICONS-LICENSE-APACHE.txt`).

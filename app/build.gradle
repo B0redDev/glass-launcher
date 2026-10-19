@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'dev.matteo.glass'
+    namespace 'io.github.b0reddev.glass'
     compileSdk 34
 
     defaultConfig {
-        applicationId 'dev.matteo.glass'
+        applicationId 'io.github.b0reddev.glass'
         minSdk 26
         targetSdk 34
         versionCode 1

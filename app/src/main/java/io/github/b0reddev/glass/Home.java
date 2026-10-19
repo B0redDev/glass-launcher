@@ -1,4 +1,4 @@
-package dev.matteo.glass;
+package io.github.b0reddev.glass;
 
 import android.animation.ValueAnimator;
 import android.app.Activity;
@@ -45,8 +45,8 @@ import java.util.HashMap;
 import java.util.List;
 
 /**
- * tvOS 26 style home in rows: Preferite, the TV's inputs, then one row per category. The focused row
- * always sits under the title; Sposta reorders within a row (←/→) and moves an app between rows (↑/↓).
+ * tvOS 26 style home in rows: Favourites, the TV's inputs, then one row per category. The focused row
+ * always sits under the title; Move reorders within a row (←/→) and moves an app between rows (↑/↓).
  */
 public final class Home extends Activity {
     private static final int MATCH = ViewGroup.LayoutParams.MATCH_PARENT, WRAP = ViewGroup.LayoutParams.WRAP_CONTENT;
