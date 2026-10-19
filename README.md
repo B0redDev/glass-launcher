@@ -81,3 +81,7 @@ Xiaomi](https://github.com/Gathin23/cleanyourtv/blob/main/examples/xiaomi-tv-a-p
 
 Fonts: Inter (SIL Open Font License, `FONT-LICENSE-OFL.txt`), subset to Latin. Icons: Material Symbols
 Rounded (Apache 2.0, `ICONS-LICENSE-APACHE.txt`).
+
+## License
+
+MIT, see [`LICENSE`](LICENSE). The bundled font and icons keep their own licenses (above).
