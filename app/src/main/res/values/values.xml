@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Glass</string>
+    <string name="dream_name">Glass · Orologio</string>
+    <string name="inputs">Ingressi</string>
+    <string name="settings">Impostazioni</string>
+    <string name="ethernet">Ethernet</string>
+    <string name="offline">Offline</string>
+    <string name="wifi">Wi-Fi</string>
+    <string name="move">Sposta</string>
+    <string name="hide">Nascondi</string>
+    <string name="unhide">Mostra</string>
+    <string name="app_info">Info app</string>
+    <string name="show_hidden">Mostra app nascoste (%d)</string>
+    <string name="hide_hidden">Nascondi app nascoste</string>
+    <string name="input_connected">Collegato</string>
+    <string name="input_standby">In standby</string>
+    <string name="input_disconnected">Non collegato</string>
+    <string name="live_tv">TV</string>
+    <string name="move_hint">Usa le frecce per spostare, OK per confermare</string>
+
+    <style name="Glass" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@color/night</item>
+        <item name="android:colorBackground">@color/night</item>
+        <item name="android:windowShowWallpaper">false</item>
+    </style>
+    <color name="night">#FF070910</color>
+</resources>
