@@ -41,7 +41,6 @@ final class Row extends ViewGroup {
         setWillNotDraw(false);
         label.setTypeface(Ui.medium);
         label.setTextSize(13 * TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 1, c.getResources().getDisplayMetrics()));
-        label.setColor(0xB3FFFFFF);
     }
 
     /** Distance from the row's top to its cells: where the cells sit when the row is the focused one. */
@@ -74,7 +73,9 @@ final class Row extends ViewGroup {
     @Override
     protected void onDraw(Canvas c) {
         if (labelAlpha <= 0) return;
-        label.setAlpha((int) (0xB3 * labelAlpha));
+        int color = Theme.current.label;
+        label.setColor(color);
+        label.setAlpha((int) ((color >>> 24) * labelAlpha));
         c.drawText(title, padX + getScrollX(), labelH - Ui.dp(9), label); // the name doesn't scroll with the cells
     }
 

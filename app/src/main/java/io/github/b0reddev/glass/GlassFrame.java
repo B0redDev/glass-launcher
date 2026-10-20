@@ -17,9 +17,9 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
- * Liquid Glass panel: shows the backdrop's blurred copy at its own position, a faint white tint and a
- * light rim brighter at the top edge. Focusable panels (pills, menu rows) turn into a bright platter
- * with dark content when focused, as tvOS buttons do.
+ * Liquid Glass panel: shows the backdrop's blurred copy at its own position, the theme's fill and a
+ * rim brighter at the top edge. Focused, it becomes a bright platter with dark content (light theme,
+ * as tvOS buttons do) or gets a blue ring (dark theme).
  */
 class GlassFrame extends LinearLayout {
     static final int LIGHT = 0xFFFFFFFF, DARK = 0xFF111318;
@@ -30,13 +30,14 @@ class GlassFrame extends LinearLayout {
     private final Paint glass = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
     private final Paint fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Matrix m = new Matrix();
     private final RectF r = new RectF();
     private final int[] loc = new int[2], bloc = new int[2];
-    private float tint = 0.10f;
-    private boolean bright;
+    private boolean panel, bright;
+    private Theme rimTheme;
 
-    /** @param sample false for rows inside a panel: they only draw the focus platter, the panel is the glass. */
+    /** @param sample false for rows inside a panel: they only draw their fill and focus, the panel is the glass. */
     GlassFrame(Context c, Backdrop backdrop, float radius, boolean sample) {
         super(c);
         this.backdrop = backdrop;
@@ -47,11 +48,13 @@ class GlassFrame extends LinearLayout {
         glass.setShader(new BitmapShader(backdrop.glass, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP));
         rim.setStyle(Paint.Style.STROKE);
         rim.setStrokeWidth(Ui.dp(1));
+        ring.setStyle(Paint.Style.STROKE);
+        ring.setStrokeWidth(Ui.dp(2.5f));
     }
 
-    void setTint(float t) {
-        tint = t;
-        invalidate();
+    /** Menus and the settings panel: a denser fill than pills and cards. */
+    void setPanel() {
+        panel = true;
     }
 
     @Override
@@ -68,11 +71,12 @@ class GlassFrame extends LinearLayout {
 
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
-        rim.setShader(new LinearGradient(0, 0, 0, h, 0x8CFFFFFF, 0x14FFFFFF, Shader.TileMode.CLAMP));
+        rimTheme = null;
     }
 
     @Override
     protected void onDraw(Canvas c) {
+        Theme t = Theme.current;
         float half = rim.getStrokeWidth() / 2;
         r.set(half, half, getWidth() - half, getHeight() - half);
         if (sample && !bright) {
@@ -90,20 +94,46 @@ class GlassFrame extends LinearLayout {
         if (bright) {
             fill.setColor(0xF2FFFFFF);
             c.drawRoundRect(r, radius, radius, fill);
-        } else if (tint > 0) {
-            fill.setColor((int) (tint * 255) << 24 | 0xFFFFFF);
-            c.drawRoundRect(r, radius, radius, fill);
-            if (sample) c.drawRoundRect(r, radius, radius, rim);
+            return;
         }
+        int f = !sample ? t.rowFill : panel ? t.panelFill : t.glassFill;
+        if (f != 0) {
+            fill.setColor(f);
+            c.drawRoundRect(r, radius, radius, fill);
+        }
+        if (sample) {
+            if (rimTheme != t) {
+                rimTheme = t;
+                rim.setShader(new LinearGradient(0, 0, 0, getHeight(), t.rimTop, t.rimBottom, Shader.TileMode.CLAMP));
+            }
+            c.drawRoundRect(r, radius, radius, rim);
+        }
+        if (t.ring != 0 && isFocused()) {
+            fill.setColor(t.ringFill());
+            c.drawRoundRect(r, radius, radius, fill);
+            ring.setColor(t.ring);
+            drawRing(c, this, ring, radius, sample);
+        }
+    }
+
+    /**
+     * Dark theme focus: a ring 3 dp outside the view (pills, cards, tiles: their parents don't clip
+     * children), or on its edge for rows inside a panel, which does clip.
+     */
+    static void drawRing(Canvas c, View v, Paint ring, float radius, boolean outside) {
+        float half = ring.getStrokeWidth() / 2, out = outside ? Ui.dp(3) + half : -half;
+        float rr = radius + out;
+        c.drawRoundRect(-out, -out, v.getWidth() + out, v.getHeight() + out, rr, rr, ring);
     }
 
     @Override
     protected void onFocusChanged(boolean focused, int direction, Rect previous) {
         super.onFocusChanged(focused, direction, previous);
-        bright = focused;
-        recolor(this, focused ? DARK : LIGHT);
+        boolean zoom = Theme.current.ring == 0;
+        bright = focused && zoom;
+        recolor(this, bright ? DARK : LIGHT);
         if (sample) {
-            float s = focused ? 1.08f : 1f;
+            float s = bright ? 1.08f : 1f;
             animate().scaleX(s).scaleY(s).setInterpolator(Ui.FOCUS).setDuration(380).start();
         }
         invalidate();

@@ -16,13 +16,12 @@ import android.view.View;
 import java.util.ArrayList;
 
 /**
- * The wallpaper layer: a procedural aurora, washed with a blurred copy of the focused app's art
- * (the Top Shelf ambience), plus a tiny blurred and saturated copy of itself that glass panels
- * sample instead of doing a real backdrop blur. Redrawn only when the ambience or dim changes.
+ * The wallpaper layer: the theme's wallpaper, washed with a blurred copy of the focused app's art
+ * (the Top Shelf ambience, light theme only), plus a tiny blurred and saturated copy of itself that
+ * glass panels sample instead of doing a real backdrop blur. Redrawn only when something changes.
  */
 final class Backdrop extends View {
     static final int GW = 96, GH = 54;
-    private static final float AMBIENT = 0.85f;
 
     /** What glass panels show through themselves: this layer at 1/20 scale, blurred, saturated. */
     final Bitmap glass = Bitmap.createBitmap(GW, GH, Bitmap.Config.ARGB_8888);
@@ -77,14 +76,19 @@ final class Backdrop extends View {
         for (int i = 0; i < clients.size(); i++) clients.get(i).invalidate();
     }
 
+    void themeChanged() {
+        if (getWidth() == 0) return;
+        wall = Theme.current.wallpaper(Math.max(1, getWidth() / 4), Math.max(1, getHeight() / 4));
+        changed();
+    }
+
     @Override
     protected void onSizeChanged(int w, int h, int ow, int oh) {
         full.set(0, 0, w, h);
-        wall = aurora(Math.max(1, w / 4), Math.max(1, h / 4));
         scrim.setShader(new LinearGradient(0, 0, 0, h,
                 new int[]{0x66000000, 0x1A000000, 0x33000000, 0xB3000000},
                 new float[]{0f, 0.3f, 0.55f, 1f}, Shader.TileMode.CLAMP));
-        changed();
+        themeChanged();
     }
 
     @Override
@@ -95,17 +99,21 @@ final class Backdrop extends View {
 
     private void paint(Canvas c, RectF r) {
         if (wall == null) return;
+        Theme t = Theme.current;
         c.drawBitmap(wall, null, r, bmp);
-        if (from != null) {
-            // Fading to no ambience (an input is focused): the old one fades out instead of being covered.
-            bmp.setAlpha((int) (255 * AMBIENT * (to == null ? 1 - mix : 1)));
-            c.drawBitmap(from, null, r, bmp);
+        if (t.ambient > 0) {
+            if (from != null) {
+                // Fading to no ambience (an input is focused): the old one fades out instead of being covered.
+                bmp.setAlpha((int) (255 * t.ambient * (to == null ? 1 - mix : 1)));
+                c.drawBitmap(from, null, r, bmp);
+            }
+            if (to != null) {
+                bmp.setAlpha((int) (255 * t.ambient * mix));
+                c.drawBitmap(to, null, r, bmp);
+            }
+            bmp.setAlpha(255);
         }
-        if (to != null) {
-            bmp.setAlpha((int) (255 * AMBIENT * mix));
-            c.drawBitmap(to, null, r, bmp);
-        }
-        bmp.setAlpha(255);
+        if (!t.scrim) return;
         c.save();
         c.scale(r.width() / full.width(), r.height() / full.height());
         c.drawRect(full, scrim);
@@ -152,6 +160,17 @@ final class Backdrop extends View {
         blob(c, p, w * .88f, h * .22f, w * .55f, 0x737B3FE4);
         blob(c, p, w * .62f, h * 1.05f, w * .60f, 0x4D00A6A6);
         blob(c, p, w * .02f, h * .98f, w * .45f, 0x40C2338A);
+        return b;
+    }
+
+    /** Dark theme: near-black, one cold light low on the right and a faint one top left (Nuvio OS). */
+    static Bitmap night(int w, int h) {
+        Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        Canvas c = new Canvas(b);
+        c.drawColor(0xFF0D0C0F);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.DITHER_FLAG);
+        blob(c, p, w, h * .82f, w * .75f, 0xD9364048);
+        blob(c, p, 0, 0, w * .45f, 0x8C1C1F28);
         return b;
     }
 

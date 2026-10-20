@@ -9,6 +9,12 @@
     <string name="hide_hidden">Nascondi app nascoste</string>
     <string name="move_hint">←/→ riordina · ↑/↓ cambia riga · OK conferma</string>
 
+    <string name="settings">Impostazioni</string>
+    <string name="theme">Tema</string>
+    <string name="theme_light">Chiaro</string>
+    <string name="theme_dark">Scuro</string>
+    <string name="android_settings">Impostazioni di Android</string>
+
     <string name="row_fav">Preferite</string>
     <string name="row_sources">Sorgenti</string>
     <string name="row_streaming">Streaming e TV</string>

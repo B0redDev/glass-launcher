@@ -34,6 +34,7 @@ public final class ClockDream extends DreamService {
         setInteractive(false);
         setFullscreen(true);
         Ui.init(this);
+        Theme.load(this);
         FrameLayout root = new FrameLayout(this);
         Backdrop b = new Backdrop(this);
         b.setDim(0.6f);

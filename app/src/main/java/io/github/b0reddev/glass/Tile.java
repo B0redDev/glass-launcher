@@ -36,6 +36,7 @@ final class Tile extends View {
     private final Paint rim = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint gloss = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint sheenPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final TextPaint small = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final RectF r = new RectF(), icon = new RectF();
     private final Matrix m = new Matrix();
@@ -57,6 +58,8 @@ final class Tile extends View {
         });
         rim.setStyle(Paint.Style.STROKE);
         rim.setStrokeWidth(Ui.dp(1));
+        ring.setStyle(Paint.Style.STROKE);
+        ring.setStrokeWidth(Ui.dp(2.5f));
         small.setTypeface(Ui.medium);
         small.setTextSize(11 * TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, 1, c.getResources().getDisplayMetrics()));
         small.setColor(0xD9FFFFFF);
@@ -108,7 +111,7 @@ final class Tile extends View {
 
     void setLifted(boolean l) {
         lifted = l;
-        float s = l ? LIFTED : (isFocused() ? FOCUSED : 1f);
+        float s = l ? LIFTED : (isFocused() ? Theme.current.tileScale : 1f);
         animate().scaleX(s).scaleY(s).translationZ(Ui.dp(l ? 28 : (isFocused() ? 14 : 0)))
                 .setInterpolator(Ui.FOCUS).setDuration(420).start();
     }
@@ -122,7 +125,7 @@ final class Tile extends View {
     protected void onFocusChanged(boolean f, int dir, Rect prev) {
         super.onFocusChanged(f, dir, prev);
         if (!lifted) {
-            float s = f ? FOCUSED : 1f;
+            float s = f ? Theme.current.tileScale : 1f;
             animate().scaleX(s).scaleY(s).translationZ(f ? Ui.dp(14) : 0)
                     .setInterpolator(Ui.FOCUS).setDuration(420).start();
         }
@@ -153,18 +156,24 @@ final class Tile extends View {
             c.drawBitmap(art, null, icon, artPaint);
             c.drawText(smallName, w / 2f, h * 0.88f, small);
         }
-        if (glow > 0) {
+        Theme t = Theme.current;
+        boolean zoom = t.ring == 0;
+        if (zoom && glow > 0) {
             gloss.setAlpha((int) (255 * glow));
             c.drawRoundRect(r, radius, radius, gloss);
         }
-        if (sheen >= 0) {
+        if (zoom && sheen >= 0) {
             m.setTranslate(-w * 0.6f + sheen * w * 2.2f, 0);
             sheenPaint.getShader().setLocalMatrix(m);
             c.drawRoundRect(r, radius, radius, sheenPaint);
         }
         float half = rim.getStrokeWidth() / 2;
         r.inset(half, half);
-        rim.setAlpha(38 + (int) (120 * glow));
+        rim.setAlpha(38 + (zoom ? (int) (120 * glow) : 0));
         c.drawRoundRect(r, radius, radius, rim);
+        if (!zoom && isFocused()) {
+            ring.setColor(t.ring);
+            GlassFrame.drawRing(c, this, ring, radius, true);
+        }
     }
 }

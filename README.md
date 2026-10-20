@@ -32,7 +32,7 @@ Other otherwise. After that you decide with Move.
 | Remote | Action |
 |---|---|
 | ←/→ | Scroll the row |
-| ↑/↓ | Row above/below, on the closest item; ↑ from the first row reaches Wi-Fi and Settings |
+| ↑/↓ | Row above/below, on the closest item; ↑ from the first row reaches the network and settings buttons |
 | OK | Open the app, or switch to the HDMI input / aerial |
 | Hold OK | Menu: Move, Hide / Show, App info, Show hidden apps |
 | Move → ←/→ | Reorder within the row (the tiles wiggle) |
@@ -41,6 +41,15 @@ Other otherwise. After that you decide with Move.
 | Back / Home while on Glass | Back to the start of the first row |
 
 Rows, order and hidden apps are saved in the app's preferences (lost only when uninstalling it).
+
+## Settings and themes
+
+The gear button opens Glass's settings panel: the theme, and a shortcut to Android's own settings.
+
+- **Light**: aurora wallpaper tinted by the focused app; focus zooms the tile and turns buttons white.
+- **Dark** (after Nuvio OS): near-black with one cold light, no app colour; focus is a blue ring.
+
+The choice applies immediately and is saved; the clock screensaver follows it too.
 
 ## Screensaver
 
@@ -77,6 +86,8 @@ Xiaomi](https://github.com/Gathin23/cleanyourtv/blob/main/examples/xiaomi-tv-a-p
 | `Tile.java` | App banner: rounded corners, focus zoom, gloss sweep |
 | `App.java` | Installed apps, starting rows, saved rows/order/hidden apps, banner loading |
 | `ClockDream.java` | Clock screensaver |
+| `Theme.java` | The light and dark themes; every view reads the current one while drawing |
+| `Swatch.java` | Theme preview in the settings panel |
 
 Fonts: Inter (SIL Open Font License, `FONT-LICENSE-OFL.txt`), subset to Latin. Icons: Material Symbols
 Rounded (Apache 2.0, `ICONS-LICENSE-APACHE.txt`).

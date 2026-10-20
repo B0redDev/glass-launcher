@@ -103,6 +103,7 @@ public final class Home extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         Ui.init(this);
+        Theme.load(this);
         prefs = getSharedPreferences("glass", MODE_PRIVATE);
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int side = Ui.dp(48);
@@ -148,7 +149,7 @@ public final class Home extends Activity {
 
         LinearLayout titleBox = new LinearLayout(this);
         titleBox.setOrientation(LinearLayout.VERTICAL);
-        overline = Ui.text(this, Ui.medium, 12, 0x99FFFFFF);
+        overline = Ui.text(this, Ui.medium, 12, Theme.current.overline);
         overline.setLetterSpacing(0.14f);
         overline.setAllCaps(true);
         title = Ui.text(this, Ui.semibold, 34, 0xFFFFFFFF);
@@ -163,7 +164,7 @@ public final class Home extends Activity {
 
         topBar = new LinearLayout(this);
         topBar.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
-        topBar.setPadding(side, Ui.dp(28), side, 0);
+        topBar.setPadding(side, Ui.dp(28), side, Ui.dp(8)); // bottom: room for the dark theme's focus ring, the root clips
         topBar.setClipChildren(false);
         topBar.setClipToPadding(false);
         TextClock time = Ui.style(new TextClock(this), Ui.light, 24, 0xFFFFFFFF);
@@ -175,10 +176,10 @@ public final class Home extends Activity {
         topBar.addView(time, cl);
         // Icon only: Wi-Fi, Ethernet or offline. The state's name is kept for screen readers.
         netPill = pill(R.drawable.ic_wifi, null,
-                () -> start(new Intent(Settings.ACTION_WIFI_SETTINGS), new Intent(Settings.ACTION_SETTINGS)));
+                v -> start(new Intent(Settings.ACTION_WIFI_SETTINGS), new Intent(Settings.ACTION_SETTINGS)));
         netIcon = (ImageView) netPill.getChildAt(0);
         topBar.addView(netPill);
-        topBar.addView(pill(R.drawable.ic_settings, null, () -> start(new Intent(Settings.ACTION_SETTINGS))));
+        topBar.addView(pill(R.drawable.ic_settings, null, v -> openSettings(v, true)));
         root.addView(topBar, MATCH, WRAP);
 
         hint = new GlassFrame(this, backdrop, Ui.dp(20), true);
@@ -722,12 +723,12 @@ public final class Home extends Activity {
 
     // ---- glass pills and menus ----
 
-    private GlassFrame pill(int icon, String label, Runnable click) {
+    private GlassFrame pill(int icon, String label, View.OnClickListener click) {
         int h = Ui.dp(40);
         GlassFrame p = new GlassFrame(this, backdrop, h / 2f, true);
         p.setGravity(Gravity.CENTER);
         p.setFocusable(true);
-        p.setOnClickListener(v -> click.run());
+        p.setOnClickListener(click);
         if (label != null) p.setPadding(Ui.dp(14), 0, Ui.dp(16), 0);
         ImageView iv = new ImageView(this);
         iv.setImageResource(icon);
@@ -764,12 +765,11 @@ public final class Home extends Activity {
         menuAnchor = anchor;
         panel = new GlassFrame(this, backdrop, Ui.dp(22), true);
         panel.setOrientation(LinearLayout.VERTICAL);
-        panel.setTint(0.16f);
+        panel.setPanel();
         panel.setPadding(Ui.dp(8), Ui.dp(8), Ui.dp(8), Ui.dp(8));
         panel.setMinimumWidth(Ui.dp(240));
         for (Item it : items) {
             GlassFrame row = new GlassFrame(this, backdrop, Ui.dp(14), false);
-            row.setTint(0f);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(Ui.dp(14), Ui.dp(10), Ui.dp(18), Ui.dp(10));
             row.setFocusable(true);
@@ -803,13 +803,7 @@ public final class Home extends Activity {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(WRAP, WRAP);
         lp.leftMargin = x;
         lp.topMargin = y;
-        overlay.addView(panel, lp);
-        overlay.setVisibility(View.VISIBLE);
-        scroll.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
-        topBar.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
-
-        scrim.setAlpha(0f);
-        scrim.animate().alpha(1f).setDuration(200).start();
+        attachPanel(lp, true);
         panel.setPivotX(pw / 2f);
         panel.setPivotY(below ? 0 : ph);
         panel.setAlpha(0f);
@@ -819,13 +813,143 @@ public final class Home extends Activity {
         panel.getChildAt(0).requestFocus();
     }
 
+    /** Settings, at the right edge: the theme, and the way to Android's own settings. */
+    private void openSettings(View anchor, boolean animate) {
+        closeMenu();
+        menuAnchor = anchor;
+        Theme t = Theme.current;
+        panel = new GlassFrame(this, backdrop, Ui.dp(28), true);
+        panel.setPanel();
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setClipChildren(false);
+        panel.setPadding(Ui.dp(24), Ui.dp(28), Ui.dp(24), Ui.dp(24));
+        TextView over = Ui.text(this, Ui.medium, 12, t.overline);
+        over.setLetterSpacing(0.14f);
+        over.setAllCaps(true);
+        over.setText(R.string.app_name);
+        panel.addView(over);
+        TextView head = Ui.text(this, Ui.semibold, 26, GlassFrame.LIGHT);
+        head.setText(R.string.settings);
+        panel.addView(head, margins(6, 0));
+        TextView themes = Ui.text(this, Ui.medium, 13, t.label);
+        themes.setText(R.string.theme);
+        panel.addView(themes, margins(32, 12));
+
+        LinearLayout swatches = new LinearLayout(this);
+        swatches.setClipChildren(false);
+        Swatch focus = null;
+        for (Theme th : new Theme[]{Theme.LIGHT, Theme.DARK}) {
+            LinearLayout box = new LinearLayout(this);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setClipChildren(false);
+            Swatch s = new Swatch(this, th);
+            s.setOnClickListener(v -> applyTheme(th));
+            box.addView(s, WRAP, WRAP); // a vertical LinearLayout defaults to MATCH_PARENT, which shrinks the box to the label
+            TextView name = Ui.text(this, Ui.medium, 14, GlassFrame.LIGHT);
+            name.setText(th == Theme.LIGHT ? R.string.theme_light : R.string.theme_dark);
+            box.addView(name, margins(10, 0));
+            LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(WRAP, WRAP);
+            if (th != Theme.LIGHT) bl.leftMargin = Ui.dp(16);
+            swatches.addView(box, bl);
+            if (th == t) focus = s;
+        }
+        panel.addView(swatches);
+
+        GlassFrame android = new GlassFrame(this, backdrop, Ui.dp(14), false);
+        android.setGravity(Gravity.CENTER_VERTICAL);
+        android.setPadding(Ui.dp(14), 0, Ui.dp(10), 0);
+        android.setFocusable(true);
+        android.setOnClickListener(v -> {
+            closeMenu();
+            start(new Intent(Settings.ACTION_SETTINGS));
+        });
+        ImageView gear = new ImageView(this);
+        gear.setImageResource(R.drawable.ic_settings);
+        gear.setImageTintList(ColorStateList.valueOf(GlassFrame.LIGHT));
+        android.addView(gear, Ui.dp(20), Ui.dp(20));
+        TextView label = Ui.text(this, Ui.medium, 15, GlassFrame.LIGHT);
+        label.setText(R.string.android_settings);
+        LinearLayout.LayoutParams ll = new LinearLayout.LayoutParams(0, WRAP, 1f);
+        ll.leftMargin = Ui.dp(12);
+        android.addView(label, ll);
+        ImageView chevron = new ImageView(this);
+        chevron.setImageResource(R.drawable.ic_chevron_right);
+        chevron.setImageTintList(ColorStateList.valueOf(GlassFrame.LIGHT));
+        chevron.setAlpha(0.6f);
+        android.addView(chevron, Ui.dp(20), Ui.dp(20));
+        LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(MATCH, Ui.dp(48));
+        al.topMargin = Ui.dp(28);
+        panel.addView(android, al);
+
+        panel.addView(new View(this), new LinearLayout.LayoutParams(MATCH, 0, 1f));
+        TextView about = Ui.text(this, Ui.medium, 12, 0x8CFFFFFF);
+        about.setText(getString(R.string.about, versionName()));
+        panel.addView(about);
+
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Ui.dp(340), MATCH, Gravity.END);
+        int m = Ui.dp(24);
+        lp.setMargins(m, m, m, m);
+        attachPanel(lp, animate);
+        if (animate) {
+            panel.setAlpha(0f);
+            panel.setTranslationX(Ui.dp(40));
+            panel.animate().alpha(1f).translationX(0).setInterpolator(new DecelerateInterpolator()).setDuration(280).start();
+        }
+        focus.requestFocus();
+    }
+
+    private static LinearLayout.LayoutParams margins(int top, int bottom) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(WRAP, WRAP);
+        p.topMargin = Ui.dp(top);
+        p.bottomMargin = Ui.dp(bottom);
+        return p;
+    }
+
+    private String versionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (PackageManager.NameNotFoundException e) {
+            return "";
+        }
+    }
+
+    /** Switches theme in place: every view reads the theme while drawing, so a redraw is all it takes. */
+    private void applyTheme(Theme t) {
+        if (t == Theme.current) return;
+        Theme.set(this, t);
+        overline.setTextColor(t.overline);
+        backdrop.themeChanged();
+        redraw(getWindow().getDecorView());
+        openSettings(menuAnchor, false); // the panel's own text colours, and the focus style of the chosen swatch
+    }
+
+    private static void redraw(View v) {
+        v.invalidate();
+        if (!(v instanceof ViewGroup)) return;
+        ViewGroup g = (ViewGroup) v;
+        for (int i = 0; i < g.getChildCount(); i++) redraw(g.getChildAt(i));
+    }
+
+    /** Shows {@code panel} over a dimmed home; everything else stops taking focus until it closes. */
+    private void attachPanel(FrameLayout.LayoutParams lp, boolean fade) {
+        overlay.addView(panel, lp);
+        overlay.setVisibility(View.VISIBLE);
+        scroll.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        topBar.setDescendantFocusability(ViewGroup.FOCUS_BLOCK_DESCENDANTS);
+        scrim.animate().cancel();
+        scrim.setAlpha(fade ? 0f : 1f);
+        if (fade) scrim.animate().alpha(1f).setDuration(200).start();
+    }
+
     private void closeMenu() {
         if (panel == null) return;
         overlay.removeView(panel);
         panel = null;
         overlay.setVisibility(View.GONE);
         scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
-        // Focusing the anchor again runs focusRow, which also restores whether the top bar can take focus.
+        // The anchor may sit in the top bar (the settings gear); a tile or card anchor re-blocks the bar
+        // through focusRow when it takes focus back, unless its row is the first one.
+        topBar.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         if (menuAnchor != null && menuAnchor.isAttachedToWindow()) menuAnchor.requestFocus();
     }
 }
