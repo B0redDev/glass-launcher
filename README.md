@@ -57,8 +57,11 @@ The gear button opens Glass's settings panel: the theme, and a shortcut to Andro
 
 - **Light**: aurora wallpaper tinted by the focused app; focus zooms the tile and turns buttons white.
 - **Dark** (after Nuvio OS): near-black with one cold light, no app colour; focus is a blue ring.
+- **Automatic** (after Free My TV): Light from sunrise, Dark from sunset. The times are worked out on the TV for
+  the main city of its time zone (IANA `zone.tab` coordinates), with no network and no location permission; the
+  panel shows the next switch. It happens live, and again on returning Home after standby.
 
-The choice applies immediately and is saved; the clock screensaver follows it too.
+The choice applies immediately and is saved; the clock screensaver follows the look it starts with.
 
 ## Screensaver
 
@@ -95,7 +98,8 @@ Xiaomi](https://github.com/Gathin23/cleanyourtv/blob/main/examples/xiaomi-tv-a-p
 | `Tile.java` | App banner: rounded corners, focus zoom, gloss sweep |
 | `App.java` | Installed apps, starting rows, saved rows/order/hidden apps, banner loading |
 | `ClockDream.java` | Clock screensaver |
-| `Theme.java` | The light and dark themes; every view reads the current one while drawing |
+| `Theme.java` | The light and dark themes and the saved choice; every view reads the current one while drawing |
+| `Sun.java` | Sunrise and sunset for the Automatic theme (tested in `src/test`) |
 | `Swatch.java` | Theme preview in the settings panel |
 
 Fonts: Inter (SIL Open Font License, `FONT-LICENSE-OFL.txt`), subset to Latin. Icons: Material Symbols

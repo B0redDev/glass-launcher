@@ -14,6 +14,8 @@ import android.content.pm.ResolveInfo;
 import android.content.res.ColorStateList;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
+import android.icu.text.TimeZoneNames;
+import android.icu.util.ULocale;
 import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
@@ -28,6 +30,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.text.format.DateFormat;
 import android.util.DisplayMetrics;
 import android.view.FocusFinder;
 import android.view.Gravity;
@@ -45,8 +48,10 @@ import android.widget.TextClock;
 import android.widget.TextView;
 
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.List;
+import java.util.TimeZone;
 
 /**
  * tvOS 26 style home in rows: Favourites, the TV's inputs, then one row per category. The focused row
@@ -79,7 +84,8 @@ public final class Home extends Activity {
     private View scrim, menuAnchor, lastFocus;
     private List<App> apps = new ArrayList<>();
     private App moving;
-    private boolean showHidden, resumed, relocating;
+    private boolean showHidden, resumed, relocating, settingsOpen;
+    private final Runnable themeTick = this::checkTheme;
     private ValueAnimator scrollAnim, wiggle;
     private int favW, favH, scrollTarget;
     private volatile int artGen;
@@ -252,6 +258,7 @@ public final class Home extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
+        checkTheme(); // Automatic: the sunset may have passed while another app or standby had the screen
     }
 
     @Override
@@ -273,6 +280,7 @@ public final class Home extends Activity {
     @Override
     protected void onDestroy() {
         artGen++;
+        main.removeCallbacks(themeTick);
         unregisterReceiver(packages);
         if (tim != null) tim.unregisterCallback(inputs);
         ConnectivityManager cm = getSystemService(ConnectivityManager.class);
@@ -924,6 +932,7 @@ public final class Home extends Activity {
         panel.setPanel();
         panel.setOrientation(LinearLayout.VERTICAL);
         panel.setClipChildren(false);
+        panel.setClipToPadding(false); // the last swatch's focus ring reaches into the padding
         panel.setPadding(Ui.dp(24), Ui.dp(28), Ui.dp(24), Ui.dp(24));
         TextView over = Ui.text(this, Ui.medium, 12, t.overline);
         over.setLetterSpacing(0.14f);
@@ -940,22 +949,38 @@ public final class Home extends Activity {
         LinearLayout swatches = new LinearLayout(this);
         swatches.setClipChildren(false);
         Swatch focus = null;
-        for (Theme th : new Theme[]{Theme.LIGHT, Theme.DARK}) {
+        String[] choices = {Theme.LIGHT.id, Theme.DARK.id, Theme.AUTO};
+        int[] names = {R.string.theme_light, R.string.theme_dark, R.string.theme_auto};
+        for (int i = 0; i < choices.length; i++) {
+            String ch = choices[i];
             LinearLayout box = new LinearLayout(this);
             box.setOrientation(LinearLayout.VERTICAL);
             box.setClipChildren(false);
-            Swatch s = new Swatch(this, th);
-            s.setOnClickListener(v -> applyTheme(th));
+            Swatch s = new Swatch(this, ch);
+            s.setOnClickListener(v -> applyTheme(ch));
             box.addView(s, WRAP, WRAP); // a vertical LinearLayout defaults to MATCH_PARENT, which shrinks the box to the label
             TextView name = Ui.text(this, Ui.medium, 14, GlassFrame.LIGHT);
-            name.setText(th == Theme.LIGHT ? R.string.theme_light : R.string.theme_dark);
+            name.setText(names[i]);
             box.addView(name, margins(10, 0));
             LinearLayout.LayoutParams bl = new LinearLayout.LayoutParams(WRAP, WRAP);
-            if (th != Theme.LIGHT) bl.leftMargin = Ui.dp(16);
+            if (i > 0) bl.leftMargin = Ui.dp(20);
             swatches.addView(box, bl);
-            if (th == t) focus = s;
+            if (ch.equals(Theme.choice)) focus = s;
         }
         panel.addView(swatches);
+        if (Theme.AUTO.equals(Theme.choice)) {
+            // The next switch, unless it's only the midnight re-check of a day without sunrise or sunset.
+            long now = System.currentTimeMillis(), next = Sun.nextChange(this, now);
+            boolean day = t == Theme.LIGHT;
+            if (Sun.isDay(this, next + 60_000) != day) {
+                TimeZone tz = TimeZone.getDefault();
+                String city = TimeZoneNames.getInstance(ULocale.getDefault()).getExemplarLocationName(tz.getID());
+                TextView when = Ui.text(this, Ui.medium, 12, t.label);
+                when.setText(getString(day ? R.string.auto_dark_at : R.string.auto_light_at,
+                        DateFormat.getTimeFormat(this).format(new Date(next)), city != null ? city : tz.getID()));
+                panel.addView(when, margins(14, 0));
+            }
+        }
 
         GlassFrame android = new GlassFrame(this, backdrop, Ui.dp(14), false);
         android.setGravity(Gravity.CENTER_VERTICAL);
@@ -988,7 +1013,7 @@ public final class Home extends Activity {
         about.setText(getString(R.string.about, versionName()));
         panel.addView(about);
 
-        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Ui.dp(340), MATCH, Gravity.END);
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(Ui.dp(400), MATCH, Gravity.END);
         int m = Ui.dp(24);
         lp.setMargins(m, m, m, m);
         attachPanel(lp, animate);
@@ -998,6 +1023,7 @@ public final class Home extends Activity {
             panel.animate().alpha(1f).translationX(0).setInterpolator(new DecelerateInterpolator()).setDuration(280).start();
         }
         focus.requestFocus();
+        settingsOpen = true;
     }
 
     private static LinearLayout.LayoutParams margins(int top, int bottom) {
@@ -1015,14 +1041,42 @@ public final class Home extends Activity {
         }
     }
 
-    /** Switches theme in place: every view reads the theme while drawing, so a redraw is all it takes. */
-    private void applyTheme(Theme t) {
-        if (t == Theme.current) return;
-        Theme.set(this, t);
-        overline.setTextColor(t.overline);
+    private void applyTheme(String choice) {
+        if (choice.equals(Theme.choice)) return;
+        Theme.set(this, choice);
+        themeChanged();
+        scheduleTheme();
+    }
+
+    /** Automatic: switches when the sun says so, and books the next look (hourly at most: timers skip standby). */
+    private void checkTheme() {
+        if (Theme.resolve(this)) themeChanged();
+        scheduleTheme();
+    }
+
+    private void scheduleTheme() {
+        main.removeCallbacks(themeTick);
+        if (!Theme.AUTO.equals(Theme.choice)) return;
+        long now = System.currentTimeMillis(), delay = Sun.nextChange(this, now) - now + 1000;
+        main.postDelayed(themeTick, Math.max(1000, Math.min(delay, 3_600_000)));
+    }
+
+    /** Every view reads the theme while drawing, so a redraw does most of it. */
+    private void themeChanged() {
+        overline.setTextColor(Theme.current.overline);
         backdrop.themeChanged();
         redraw(getWindow().getDecorView());
-        openSettings(menuAnchor, false); // the panel's own text colours, and the focus style of the chosen swatch
+        if (settingsOpen) {
+            openSettings(menuAnchor, false); // the panel's own text colours, the check and the next switch
+            return;
+        }
+        // Focus styles (zoom and platter, or ring) are set when focus arrives: give the focused view a new arrival.
+        View f = getCurrentFocus();
+        if (f == null) return;
+        relocating = true;
+        f.clearFocus();
+        f.requestFocus();
+        relocating = false;
     }
 
     private static void redraw(View v) {
@@ -1047,6 +1101,7 @@ public final class Home extends Activity {
         if (panel == null) return;
         overlay.removeView(panel);
         panel = null;
+        settingsOpen = false;
         overlay.setVisibility(View.GONE);
         scroll.setDescendantFocusability(ViewGroup.FOCUS_AFTER_DESCENDANTS);
         // The anchor may sit in the top bar (the settings gear); a tile or card anchor re-blocks the bar

@@ -15,6 +15,9 @@
     <string name="theme">Tema</string>
     <string name="theme_light">Chiaro</string>
     <string name="theme_dark">Scuro</string>
+    <string name="theme_auto">Automatico</string>
+    <string name="auto_dark_at">Scuro dalle %1$s (tramonto a %2$s)</string>
+    <string name="auto_light_at">Chiaro dalle %1$s (alba a %2$s)</string>
     <string name="android_settings">Impostazioni di Android</string>
 
     <string name="row_fav">Preferite</string>

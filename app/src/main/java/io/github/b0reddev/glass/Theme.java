@@ -14,6 +14,9 @@ final class Theme {
             0x1AFFFFFF, 0x29FFFFFF, 0, 0x8CFFFFFF, 0x14FFFFFF, Tile.FOCUSED, 0);
     static final Theme DARK = new Theme("dark", 0f, false, 0xFF8B9099, 0xFF9AA0A8,
             0x0FFFFFFF, 0xB816181E, 0x0DFFFFFF, 0x1FFFFFFF, 0x14FFFFFF, 1.05f, 0xFF4EA0E8);
+    /** The saved choice: {@link #LIGHT}'s or {@link #DARK}'s id, or this for Light by day and Dark from sunset. */
+    static final String AUTO = "auto";
+    static String choice = "light";
     static Theme current = LIGHT;
 
     final String id;
@@ -56,12 +59,23 @@ final class Theme {
     }
 
     static void load(Context c) {
-        current = DARK.id.equals(prefs(c).getString("theme", LIGHT.id)) ? DARK : LIGHT;
+        choice = prefs(c).getString("theme", LIGHT.id);
+        resolve(c);
     }
 
-    static void set(Context c, Theme t) {
+    static void set(Context c, String choice) {
+        Theme.choice = choice;
+        prefs(c).edit().putString("theme", choice).apply();
+        resolve(c);
+    }
+
+    /** Picks the theme for the choice and, for Automatic, the time of day. True if it changed. */
+    static boolean resolve(Context c) {
+        Theme t = AUTO.equals(choice) ? (Sun.isDay(c, System.currentTimeMillis()) ? LIGHT : DARK)
+                : DARK.id.equals(choice) ? DARK : LIGHT;
+        boolean changed = t != current;
         current = t;
-        prefs(c).edit().putString("theme", t.id).apply();
+        return changed;
     }
 
     private static SharedPreferences prefs(Context c) {
