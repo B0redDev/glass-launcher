@@ -10,6 +10,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.content.res.ColorStateList;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
@@ -17,14 +18,18 @@ import android.media.tv.TvContract;
 import android.media.tv.TvInputInfo;
 import android.media.tv.TvInputManager;
 import android.net.ConnectivityManager;
+import android.net.Network;
 import android.net.NetworkCapabilities;
+import android.net.NetworkRequest;
 import android.net.Uri;
+import android.net.VpnService;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.util.DisplayMetrics;
+import android.view.FocusFinder;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
@@ -55,6 +60,11 @@ public final class Home extends Activity {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final HashMap<String, Row> rows = new HashMap<>();
     private final HashMap<String, TextView> inputStatus = new HashMap<>();
+    /** Networks seen by the callbacks: internet-capable non-VPN ones, and VPNs. Main thread only. */
+    private final HashMap<Network, NetworkCapabilities> networks = new HashMap<>();
+    private final ArrayList<String> vpnApps = new ArrayList<>();
+    private final NetCallback netCallback = new NetCallback(), vpnCallback = new NetCallback();
+    private int netState = -1;
     private SharedPreferences prefs;
     private TvInputManager tim;
     private Backdrop backdrop;
@@ -62,8 +72,8 @@ public final class Home extends Activity {
     private LinearLayout content, topBar;
     private Row sources;
     private TextView overline, title;
-    private GlassFrame netPill;
-    private ImageView netIcon;
+    private GlassFrame netPill, vpnPill;
+    private ImageView netIcon, vpnIcon;
     private GlassFrame hint, panel;
     private FrameLayout overlay;
     private View scrim, menuAnchor, lastFocus;
@@ -174,7 +184,12 @@ public final class Home extends Activity {
         LinearLayout.LayoutParams cl = new LinearLayout.LayoutParams(WRAP, WRAP);
         cl.rightMargin = Ui.dp(8);
         topBar.addView(time, cl);
-        // Icon only: Wi-Fi, Ethernet or offline. The state's name is kept for screen readers.
+        // Icons only: the VPN state (when a VPN app is installed), then Wi-Fi, Ethernet or offline.
+        // The state's name is kept for screen readers.
+        vpnPill = pill(R.drawable.ic_remove_moderator, null, this::openVpn);
+        vpnIcon = (ImageView) vpnPill.getChildAt(0);
+        vpnPill.setVisibility(View.GONE);
+        topBar.addView(vpnPill);
         netPill = pill(R.drawable.ic_wifi, null,
                 v -> start(new Intent(Settings.ACTION_WIFI_SETTINGS), new Intent(Settings.ACTION_SETTINGS)));
         netIcon = (ImageView) netPill.getChildAt(0);
@@ -211,6 +226,18 @@ public final class Home extends Activity {
         else registerReceiver(packages, f);
         tim = (TvInputManager) getSystemService(Context.TV_INPUT_SERVICE);
         if (tim != null) tim.registerCallback(inputs, main);
+        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+        if (cm != null) {
+            // Live updates. Refreshing only in onResume left the icon on "offline" whenever the Wi-Fi came
+            // up after Home did (at boot, out of standby).
+            cm.registerNetworkCallback(new NetworkRequest.Builder()
+                    .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(), netCallback, main);
+            cm.registerNetworkCallback(new NetworkRequest.Builder()
+                    .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+                    .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN).build(), vpnCallback, main);
+            // Callbacks only report networks that exist: with none, nothing would ever say "offline".
+            if (cm.getActiveNetwork() == null) refreshNetwork();
+        }
         buildSources();
         reload();
     }
@@ -225,7 +252,6 @@ public final class Home extends Activity {
     protected void onResume() {
         super.onResume();
         resumed = true;
-        refreshNetwork();
     }
 
     @Override
@@ -249,6 +275,11 @@ public final class Home extends Activity {
         artGen++;
         unregisterReceiver(packages);
         if (tim != null) tim.unregisterCallback(inputs);
+        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
+        if (cm != null) {
+            cm.unregisterNetworkCallback(netCallback);
+            cm.unregisterNetworkCallback(vpnCallback);
+        }
         super.onDestroy();
     }
 
@@ -283,6 +314,11 @@ public final class Home extends Activity {
             lastFocus.requestFocus();
             return true;
         }
+        if (down && (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) && topBar.hasFocus()) {
+            // The ends of the bar don't fall through to the tiles below.
+            int dir = k == KeyEvent.KEYCODE_DPAD_LEFT ? View.FOCUS_LEFT : View.FOCUS_RIGHT;
+            if (FocusFinder.getInstance().findNextFocus(topBar, topBar.findFocus(), dir) == null) return true;
+        }
         if (down && (k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN) && panel == null) {
             // Up/down always lands on the next row, on the cell closest across; Android's geometric search
             // would skip a short row (Giochi has one app) for a better-aligned cell further down.
@@ -308,6 +344,8 @@ public final class Home extends Activity {
         for (App a : apps) a.tile = tile(a);
         rebuildRows(focus);
         loadArt(++artGen);
+        findVpnApps();
+        if (netState != -1) refreshNetwork(); // a VPN app installed or removed; before the first callback, wait for it
     }
 
     private Tile tile(App a) {
@@ -692,22 +730,86 @@ public final class Home extends Activity {
         return l == null || l.length() == 0 ? in.loadLabel(this) : l;
     }
 
-    private void refreshNetwork() {
-        ConnectivityManager cm = getSystemService(ConnectivityManager.class);
-        NetworkCapabilities nc = cm == null ? null : cm.getNetworkCapabilities(cm.getActiveNetwork());
-        int icon, name;
-        if (nc == null) {
-            icon = R.drawable.ic_wifi_off;
-            name = R.string.offline;
-        } else if (nc.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
-            icon = R.drawable.ic_lan;
-            name = R.string.ethernet;
-        } else {
-            icon = R.drawable.ic_wifi;
-            name = R.string.wifi;
+    private final class NetCallback extends ConnectivityManager.NetworkCallback {
+        // Called right after onAvailable too (API 26+), and again for every change, e.g. Wi-Fi signal
+        // strength: refreshNetwork only touches the views when the shown state changes.
+        @Override
+        public void onCapabilitiesChanged(Network n, NetworkCapabilities c) {
+            networks.put(n, c);
+            refreshNetwork();
         }
-        netIcon.setImageResource(icon);
-        netPill.setContentDescription(getString(name));
+
+        @Override
+        public void onLost(Network n) {
+            networks.remove(n);
+            refreshNetwork();
+        }
+    }
+
+    /**
+     * Network pill: Ethernet, Wi-Fi or offline. VPN pill, like CleanYourTV's badge: green shield while a VPN
+     * is up, red crossed shield while online without one; hidden offline and when no VPN app is installed.
+     * All networks count, not just the active one: with a VPN up, the active network is the VPN itself.
+     */
+    private void refreshNetwork() {
+        boolean online = false, ethernet = false, vpn = false;
+        for (NetworkCapabilities c : networks.values()) {
+            if (c.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) vpn = true;
+            else {
+                online = true;
+                ethernet |= c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET);
+            }
+        }
+        int state = (online ? 1 : 0) | (ethernet ? 2 : 0) | (vpn ? 4 : 0) | (vpnApps.isEmpty() ? 0 : 8);
+        if (state == netState) return;
+        netState = state;
+        netIcon.setImageResource(!online ? R.drawable.ic_wifi_off : ethernet ? R.drawable.ic_lan : R.drawable.ic_wifi);
+        netPill.setContentDescription(getString(!online ? R.string.offline : ethernet ? R.string.ethernet : R.string.wifi));
+
+        boolean show = online && (vpn || !vpnApps.isEmpty());
+        vpnPill.setVisibility(show ? View.VISIBLE : View.GONE);
+        if (!show) return;
+        int accent = vpn ? 0xFF30D158 : 0xFFFF453A;
+        vpnIcon.setImageResource(vpn ? R.drawable.ic_shield_lock : R.drawable.ic_remove_moderator);
+        vpnIcon.setTag(accent); // GlassFrame keeps it when focus comes and goes
+        boolean platter = vpnPill.isFocused() && Theme.current.ring == 0;
+        vpnIcon.setImageTintList(ColorStateList.valueOf(platter ? GlassFrame.DARK : accent));
+        vpnPill.setContentDescription(getString(vpn ? R.string.vpn_on : R.string.vpn_off));
+    }
+
+    /** Apps that provide a VPN, i.e. declare a VpnService, and can be opened. */
+    private void findVpnApps() {
+        vpnApps.clear();
+        for (ResolveInfo ri : getPackageManager().queryIntentServices(new Intent(VpnService.SERVICE_INTERFACE), 0)) {
+            String p = ri.serviceInfo.packageName;
+            if (!vpnApps.contains(p) && openIntent(p) != null) vpnApps.add(p);
+        }
+    }
+
+    private Intent openIntent(String pkg) {
+        PackageManager pm = getPackageManager();
+        Intent i = pm.getLeanbackLaunchIntentForPackage(pkg);
+        return i != null ? i : pm.getLaunchIntentForPackage(pkg);
+    }
+
+    /** The VPN pill opens the VPN app; with several installed, a menu to pick one. */
+    private void openVpn(View v) {
+        if (vpnApps.size() == 1) {
+            launch(v, openIntent(vpnApps.get(0)));
+            return;
+        }
+        ArrayList<Item> items = new ArrayList<>();
+        PackageManager pm = getPackageManager();
+        for (String p : vpnApps) {
+            CharSequence name = p;
+            try {
+                name = pm.getApplicationLabel(pm.getApplicationInfo(p, 0));
+            } catch (PackageManager.NameNotFoundException ignored) {
+                // removed meanwhile: the package name will do until the next refresh
+            }
+            items.add(new Item(R.drawable.ic_shield_lock, name, () -> launch(v, openIntent(p))));
+        }
+        if (!items.isEmpty()) openMenu(v, v.getHeight(), items);
     }
 
     private void start(Intent... candidates) {

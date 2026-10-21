@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="dream_name">Glass · Orologio</string>
+    <string name="vpn_on">VPN attiva</string>
+    <string name="vpn_off">VPN disattivata</string>
     <string name="move">Sposta</string>
     <string name="hide">Nascondi</string>
     <string name="unhide">Mostra</string>

@@ -32,7 +32,7 @@ Other otherwise. After that you decide with Move.
 | Remote | Action |
 |---|---|
 | ←/→ | Scroll the row |
-| ↑/↓ | Row above/below, on the closest item; ↑ from the first row reaches the network and settings buttons |
+| ↑/↓ | Row above/below, on the closest item; ↑ from the first row reaches the buttons at the top right |
 | OK | Open the app, or switch to the HDMI input / aerial |
 | Hold OK | Menu: Move, Hide / Show, App info, Show hidden apps |
 | Move → ←/→ | Reorder within the row (the tiles wiggle) |
@@ -41,6 +41,15 @@ Other otherwise. After that you decide with Move.
 | Back / Home while on Glass | Back to the start of the first row |
 
 Rows, order and hidden apps are saved in the app's preferences (lost only when uninstalling it).
+
+## Top bar
+
+Icons only, updated live as the network changes:
+
+- **VPN** (shown while online, when an app on the TV provides a VPN): green shield while a VPN is up, red
+  crossed shield while it is down, as CleanYourTV's badge. OK opens the VPN app; with several, a menu to pick one.
+- **Network**: Wi-Fi, Ethernet or offline. OK opens the Wi-Fi settings.
+- **Gear**: Glass's settings (below).
 
 ## Settings and themes
 

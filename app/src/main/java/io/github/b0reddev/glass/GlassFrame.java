@@ -146,7 +146,10 @@ class GlassFrame extends LinearLayout {
                 TextView t = (TextView) v;
                 t.setTextColor((color & 0x00FFFFFF) | (t.getCurrentTextColor() & 0xFF000000));
             } else if (v instanceof ImageView) {
-                ((ImageView) v).setImageTintList(ColorStateList.valueOf(color));
+                // An icon with its own colour in its tag (the VPN state) keeps it, except on the bright platter.
+                Object accent = v.getTag();
+                int c = color == LIGHT && accent instanceof Integer ? (Integer) accent : color;
+                ((ImageView) v).setImageTintList(ColorStateList.valueOf(c));
             } else if (v instanceof ViewGroup) {
                 recolor((ViewGroup) v, color);
             }
