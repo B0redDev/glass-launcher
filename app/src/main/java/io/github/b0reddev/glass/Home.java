@@ -85,7 +85,7 @@ public final class Home extends Activity {
     private View scrim, menuAnchor, lastFocus;
     private List<App> apps = new ArrayList<>();
     private App moving;
-    private boolean showHidden, relocating, settingsOpen;
+    private boolean showHidden, relocating, settingsOpen, reloadPending;
     private final Runnable themeTick = this::checkTheme;
     private ValueAnimator scrollAnim, wiggle;
     private int favW, favH, scrollTarget;
@@ -94,7 +94,9 @@ public final class Home extends Activity {
     private final BroadcastReceiver packages = new BroadcastReceiver() {
         @Override
         public void onReceive(Context c, Intent i) {
+            // During Move the rows must not change under the lifted tile: endMove catches up.
             if (moving == null) reload();
+            else reloadPending = true;
         }
     };
 
@@ -522,6 +524,7 @@ public final class Home extends Activity {
     }
 
     private void launch(View v, Intent i) {
+        if (i == null) return; // the app was disabled or removed since the rows were last refreshed
         try {
             startActivity(i, ActivityOptions.makeScaleUpAnimation(v, 0, 0, v.getWidth(), v.getHeight()).toBundle());
         } catch (ActivityNotFoundException | SecurityException ignored) {
@@ -653,6 +656,10 @@ public final class Home extends Activity {
         App.save(prefs, apps);
         hint.animate().alpha(0f).setDuration(200).withEndAction(() -> hint.setVisibility(View.GONE)).start();
         topBar.animate().alpha(barAlpha(scroll.getScrollY())).setDuration(200).start();
+        if (reloadPending) {
+            reloadPending = false;
+            reload(); // apps installed, removed or disabled during Move; App.save above already kept the order
+        }
     }
 
     // ---- inputs row and network ----
