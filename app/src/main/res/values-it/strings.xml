@@ -3,6 +3,7 @@
     <string name="dream_name">Glass · Orologio</string>
     <string name="vpn_on">VPN attiva</string>
     <string name="vpn_off">VPN disattivata</string>
+    <string name="offline">Offline</string>
     <string name="move">Sposta</string>
     <string name="hide">Nascondi</string>
     <string name="unhide">Mostra</string>
@@ -30,4 +31,5 @@
     <string name="input_connected">Collegato</string>
     <string name="input_standby">In standby</string>
     <string name="input_disconnected">Libero</string>
+    <string name="antenna">Antenna</string>
 </resources>

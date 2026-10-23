@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Glass</string>
+    <string name="app_name" translatable="false">Glass</string>
     <string name="dream_name">Glass · Clock</string>
-    <string name="ethernet">Ethernet</string>
+    <string name="ethernet" translatable="false">Ethernet</string>
     <string name="offline">Offline</string>
-    <string name="wifi">Wi-Fi</string>
+    <string name="wifi" translatable="false">Wi-Fi</string>
     <string name="vpn_on">VPN on</string>
     <string name="vpn_off">VPN off</string>
     <string name="move">Move</string>
@@ -23,7 +23,7 @@
     <string name="auto_dark_at">Dark from %1$s (sunset in %2$s)</string>
     <string name="auto_light_at">Light from %1$s (sunrise in %2$s)</string>
     <string name="android_settings">Android settings</string>
-    <string name="about">Glass %1$s · github.com/B0redDev/glass-launcher</string>
+    <string name="about" translatable="false">Glass %1$s · github.com/B0redDev/glass-launcher</string>
 
     <!-- Rows, top to bottom; the order matches App.CATS with the inputs row second. -->
     <string name="row_fav">Favourites</string>
@@ -36,7 +36,7 @@
     <string name="input_connected">Connected</string>
     <string name="input_standby">Standby</string>
     <string name="input_disconnected">Not connected</string>
-    <string name="live_tv">TV</string>
+    <string name="live_tv" translatable="false">TV</string>
     <string name="antenna">Antenna</string>
 
     <style name="Glass" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
