@@ -85,7 +85,7 @@ public final class Home extends Activity {
     private View scrim, menuAnchor, lastFocus;
     private List<App> apps = new ArrayList<>();
     private App moving;
-    private boolean showHidden, resumed, relocating, settingsOpen;
+    private boolean showHidden, relocating, settingsOpen;
     private final Runnable themeTick = this::checkTheme;
     private ValueAnimator scrollAnim, wiggle;
     private int favW, favH, scrollTarget;
@@ -260,21 +260,17 @@ public final class Home extends Activity {
     @Override
     protected void onResume() {
         super.onResume();
-        resumed = true;
         checkTheme(); // Automatic: the sunset may have passed while another app or standby had the screen
-    }
-
-    @Override
-    protected void onPause() {
-        resumed = false;
-        super.onPause();
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         // Home pressed while already home: back to the top, as tvOS does. From another app: stay put.
-        boolean wasHome = resumed;
+        // Not "resumed": Android pauses Glass before handing over the intent even when it's on screen. Not
+        // "stopped" either: Android TV's Settings is translucent and never stops Glass. Input focus is what
+        // tells them apart: any app on top holds it until Glass is back.
+        boolean wasHome = hasWindowFocus();
         closeMenu();
         if (moving != null) endMove();
         if (wasHome) toTop();
