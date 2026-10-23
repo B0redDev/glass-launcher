@@ -14,8 +14,9 @@ public class LayoutTest {
     public void roundTrip() {
         String rows = "fav\tcom.a\nfav\tcom.b\nstreaming\tcom.c\n";
         HashSet<String> hidden = new HashSet<>(Arrays.asList("com.z", "com.y"));
-        Layout.Parsed p = Layout.parse(Layout.format("dark", rows, hidden));
+        Layout.Parsed p = Layout.parse(Layout.format("dark", "wallhaven", rows, hidden));
         assertEquals("dark", p.theme);
+        assertEquals("wallhaven", p.wallpaper);
         assertEquals(rows, p.rows);
         assertEquals(hidden, p.hidden);
     }
@@ -35,8 +36,9 @@ public class LayoutTest {
 
     @Test
     public void emptyValuesRoundTrip() {
-        Layout.Parsed p = Layout.parse(Layout.format(null, "", new HashSet<>()));
+        Layout.Parsed p = Layout.parse(Layout.format(null, null, "", new HashSet<>()));
         assertNull(p.theme);
+        assertNull(p.wallpaper);
         assertEquals("", p.rows);
         assertEquals(new HashSet<String>(), p.hidden);
     }

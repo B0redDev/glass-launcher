@@ -15,9 +15,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * A plain-text copy of the layout (theme, rows, hidden apps) in the app's external files directory, where ADB
- * can read it: install.sh saves it on the PC and puts it back after a reinstall, and Glass imports it on its
- * first start. Any new persistent setting must be added to format, parse and restoreIfEmpty.
+ * A plain-text copy of the layout (theme, wallpaper source, rows, hidden apps) in the app's external files
+ * directory, where ADB can read it: install.sh saves it on the PC and puts it back after a reinstall, and Glass
+ * imports it on its first start. Any new persistent setting must be added to format, parse and restoreIfEmpty.
  */
 final class Layout {
     private static final String HEADER = "glass-layout 1";
@@ -26,14 +26,15 @@ final class Layout {
     private Layout() {}
 
     static final class Parsed {
-        String theme;
+        String theme, wallpaper;
         String rows = "";
         Set<String> hidden = new HashSet<>();
     }
 
-    static String format(String theme, String rows, Set<String> hidden) {
+    static String format(String theme, String wallpaper, String rows, Set<String> hidden) {
         StringBuilder sb = new StringBuilder(HEADER).append('\n');
         if (theme != null) sb.append("theme\t").append(theme).append('\n');
+        if (wallpaper != null) sb.append("wallpaper\t").append(wallpaper).append('\n');
         for (String line : rows.split("\n")) {
             if (!line.isEmpty()) sb.append("row\t").append(line).append('\n');
         }
@@ -52,6 +53,7 @@ final class Layout {
         for (int i = 1; i < lines.length; i++) {
             String[] f = lines[i].split("\t");
             if (f.length == 2 && f[0].equals("theme") && !f[1].isEmpty()) p.theme = f[1];
+            else if (f.length == 2 && f[0].equals("wallpaper") && !f[1].isEmpty()) p.wallpaper = f[1];
             else if (f.length == 3 && f[0].equals("row") && !f[1].isEmpty() && !f[2].isEmpty()) {
                 rows.append(f[1]).append('\t').append(f[2]).append('\n');
             } else if (f.length == 2 && f[0].equals("hidden") && !f[1].isEmpty()) p.hidden.add(f[1]);
@@ -64,8 +66,8 @@ final class Layout {
         try {
             File dir = c.getExternalFilesDir(null);
             if (dir == null) return;
-            String text = format(prefs.getString("theme", null), prefs.getString("rows", ""),
-                    prefs.getStringSet("hidden", Collections.emptySet()));
+            String text = format(prefs.getString("theme", null), prefs.getString("wallpaper", null),
+                    prefs.getString("rows", ""), prefs.getStringSet("hidden", Collections.emptySet()));
             File tmp = new File(dir, FILE + ".tmp");
             try (FileOutputStream out = new FileOutputStream(tmp)) {
                 out.write(text.getBytes(StandardCharsets.UTF_8));
@@ -89,6 +91,7 @@ final class Layout {
             if (p == null) return;
             SharedPreferences.Editor e = prefs.edit().putString("rows", p.rows).putStringSet("hidden", p.hidden);
             if (p.theme != null) e.putString("theme", p.theme);
+            if (p.wallpaper != null) e.putString("wallpaper", p.wallpaper);
             e.commit();
         } catch (Exception e) {
             // a bad file just means no restore

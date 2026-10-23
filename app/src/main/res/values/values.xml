@@ -23,6 +23,9 @@
     <string name="auto_dark_at">Dark from %1$s (sunset in %2$s)</string>
     <string name="auto_light_at">Light from %1$s (sunrise in %2$s)</string>
     <string name="android_settings">Android settings</string>
+    <string name="wallpaper_wallhaven">Wallpapers from wallhaven</string>
+    <string name="wallpaper_on">On</string>
+    <string name="wallpaper_off">Off</string>
     <string name="about" translatable="false">Glass %1$s · github.com/B0redDev/glass-launcher</string>
 
     <!-- Rows, top to bottom; the order matches App.CATS with the inputs row second. -->

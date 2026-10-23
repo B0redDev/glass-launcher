@@ -33,7 +33,9 @@ final class Backdrop extends View {
     private final Paint scrim = new Paint(Paint.DITHER_FLAG);
     private final RectF full = new RectF(), smallRect = new RectF(0, 0, GW, GH);
     private final ArrayList<View> clients = new ArrayList<>();
-    private Bitmap wall, from, to;
+    private Bitmap wall, photo, from, to;
+    /** Over a photo; tuned so every text on the home and in the panels stays at 4.5:1 or better. */
+    private static final int PHOTO_DIM = 0x80000000;
     private float mix = 1f, dim;
     private ValueAnimator fade;
 
@@ -76,9 +78,17 @@ final class Backdrop extends View {
         for (int i = 0; i < clients.size(); i++) clients.get(i).invalidate();
     }
 
+    /** The photo (already the view's size) instead of the theme's wallpaper; null goes back to the theme's. */
+    void setPhoto(Bitmap b) {
+        photo = b;
+        Theme.photo = b != null;
+        themeChanged();
+    }
+
     void themeChanged() {
         if (getWidth() == 0) return;
-        wall = Theme.current.wallpaper(Math.max(1, getWidth() / 4), Math.max(1, getHeight() / 4));
+        wall = photo != null ? photo
+                : Theme.current.wallpaper(Math.max(1, getWidth() / 4), Math.max(1, getHeight() / 4));
         changed();
     }
 
@@ -101,7 +111,9 @@ final class Backdrop extends View {
         if (wall == null) return;
         Theme t = Theme.current;
         c.drawBitmap(wall, null, r, bmp);
-        if (t.ambient > 0) {
+        // A photo is what you see: no app colour wash, an even veil for contrast, and the scrim in both themes.
+        if (photo != null) c.drawColor(PHOTO_DIM);
+        else if (t.ambient > 0) {
             if (from != null) {
                 // Fading to no ambience (an input is focused): the old one fades out instead of being covered.
                 bmp.setAlpha((int) (255 * t.ambient * (to == null ? 1 - mix : 1)));
@@ -113,7 +125,7 @@ final class Backdrop extends View {
             }
             bmp.setAlpha(255);
         }
-        if (!t.scrim) return;
+        if (!t.scrim && photo == null) return;
         c.save();
         c.scale(r.width() / full.width(), r.height() / full.height());
         c.drawRect(full, scrim);
@@ -125,7 +137,7 @@ final class Backdrop extends View {
         paint(smallCanvas, smallRect);
         glass.eraseColor(0);
         glassCanvas.drawBitmap(small, 0, 0, vivid);
-        if (Theme.current.glassVeil != 0) glassCanvas.drawColor(Theme.current.glassVeil);
+        if (Theme.current.glassVeil() != 0) glassCanvas.drawColor(Theme.current.glassVeil());
         glass.getPixels(px, 0, GW, 0, 0, GW, GH);
         blur(px, tmp, GW, GH, 3);
         blur(px, tmp, GW, GH, 3);

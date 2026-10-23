@@ -12,6 +12,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.content.res.ColorStateList;
+import android.graphics.Bitmap;
 import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.icu.text.TimeZoneNames;
@@ -169,7 +170,7 @@ public final class Home extends Activity {
 
         LinearLayout titleBox = new LinearLayout(this);
         titleBox.setOrientation(LinearLayout.VERTICAL);
-        overline = Ui.text(this, Ui.medium, 12, Theme.current.overline);
+        overline = Ui.text(this, Ui.medium, 12, Theme.current.overline());
         overline.setLetterSpacing(0.14f);
         overline.setAllCaps(true);
         title = Ui.text(this, Ui.semibold, 34, 0xFFFFFFFF);
@@ -253,6 +254,7 @@ public final class Home extends Activity {
         buildSources();
         reload();
         Layout.backup(this, prefs);
+        loadPhoto();
     }
 
     private void addRow(String cat, int name, int w, int h, int gap) {
@@ -265,6 +267,7 @@ public final class Home extends Activity {
     protected void onResume() {
         super.onResume();
         checkTheme(); // Automatic: the sunset may have passed while another app or standby had the screen
+        Wallpaper.refresh(this, this::loadPhoto);
     }
 
     @Override
@@ -941,6 +944,8 @@ public final class Home extends Activity {
 
     /** Settings, at the right edge: the theme, and the way to Android's own settings. */
     private void openSettings(View anchor, boolean animate) {
+        View focused = getCurrentFocus(); // a rebuild (theme, photo) must not take focus off the wallpaper row
+        boolean onWall = focused != null && "wallpaper".equals(focused.getTag());
         closeMenu();
         menuAnchor = anchor;
         Theme t = Theme.current;
@@ -950,7 +955,7 @@ public final class Home extends Activity {
         panel.setClipChildren(false);
         panel.setClipToPadding(false); // the last swatch's focus ring reaches into the padding
         panel.setPadding(Ui.dp(24), Ui.dp(28), Ui.dp(24), Ui.dp(24));
-        TextView over = Ui.text(this, Ui.medium, 12, t.overline);
+        TextView over = Ui.text(this, Ui.medium, 12, t.overline());
         over.setLetterSpacing(0.14f);
         over.setAllCaps(true);
         over.setText(R.string.app_name);
@@ -958,7 +963,7 @@ public final class Home extends Activity {
         TextView head = Ui.text(this, Ui.semibold, 26, GlassFrame.LIGHT);
         head.setText(R.string.settings);
         panel.addView(head, margins(6, 0));
-        TextView themes = Ui.text(this, Ui.medium, 13, t.label);
+        TextView themes = Ui.text(this, Ui.medium, 13, t.label());
         themes.setText(R.string.theme);
         panel.addView(themes, margins(32, 12));
 
@@ -993,12 +998,34 @@ public final class Home extends Activity {
             if (Sun.isDay(this, next + 60_000) != day) {
                 TimeZone tz = TimeZone.getDefault();
                 String city = TimeZoneNames.getInstance(ULocale.getDefault()).getExemplarLocationName(tz.getID());
-                TextView when = Ui.text(this, Ui.medium, 12, t.label);
+                TextView when = Ui.text(this, Ui.medium, 12, t.label());
                 when.setText(getString(day ? R.string.auto_dark_at : R.string.auto_light_at,
                         DateFormat.getTimeFormat(this).format(new Date(next)), city != null ? city : tz.getID()));
                 panel.addView(when, margins(14, 0));
             }
         }
+
+        GlassFrame wall = new GlassFrame(this, backdrop, Ui.dp(14), false);
+        wall.setTag("wallpaper");
+        wall.setGravity(Gravity.CENTER_VERTICAL);
+        wall.setPadding(Ui.dp(14), 0, Ui.dp(14), 0);
+        wall.setFocusable(true);
+        wall.setOnClickListener(v -> toggleWallpaper());
+        ImageView wallIcon = new ImageView(this);
+        wallIcon.setImageResource(R.drawable.ic_tv);
+        wallIcon.setImageTintList(ColorStateList.valueOf(GlassFrame.LIGHT));
+        wall.addView(wallIcon, Ui.dp(20), Ui.dp(20));
+        TextView wallLabel = Ui.text(this, Ui.medium, 15, GlassFrame.LIGHT);
+        wallLabel.setText(R.string.wallpaper_wallhaven);
+        LinearLayout.LayoutParams wlp = new LinearLayout.LayoutParams(0, WRAP, 1f);
+        wlp.leftMargin = Ui.dp(12);
+        wall.addView(wallLabel, wlp);
+        TextView wallState = Ui.text(this, Ui.medium, 15, GlassFrame.LIGHT);
+        wallState.setText(Wallpaper.enabled(this) ? R.string.wallpaper_on : R.string.wallpaper_off);
+        wall.addView(wallState, WRAP, WRAP);
+        LinearLayout.LayoutParams wp = new LinearLayout.LayoutParams(MATCH, Ui.dp(48));
+        wp.topMargin = Ui.dp(28);
+        panel.addView(wall, wp);
 
         GlassFrame android = new GlassFrame(this, backdrop, Ui.dp(14), false);
         android.setGravity(Gravity.CENTER_VERTICAL);
@@ -1023,7 +1050,7 @@ public final class Home extends Activity {
         chevron.setAlpha(0.6f);
         android.addView(chevron, Ui.dp(20), Ui.dp(20));
         LinearLayout.LayoutParams al = new LinearLayout.LayoutParams(MATCH, Ui.dp(48));
-        al.topMargin = Ui.dp(28);
+        al.topMargin = Ui.dp(12);
         panel.addView(android, al);
 
         panel.addView(new View(this), new LinearLayout.LayoutParams(MATCH, 0, 1f));
@@ -1040,7 +1067,7 @@ public final class Home extends Activity {
             panel.setTranslationX(Ui.dp(40));
             panel.animate().alpha(1f).translationX(0).setInterpolator(new DecelerateInterpolator()).setDuration(280).start();
         }
-        focus.requestFocus();
+        (onWall ? wall : focus).requestFocus();
         settingsOpen = true;
     }
 
@@ -1067,6 +1094,38 @@ public final class Home extends Activity {
         scheduleTheme();
     }
 
+    /** Switching on always fetches a new photo (the 24 h rule is skipped), which is also how to get another one. */
+    private void toggleWallpaper() {
+        boolean on = !Wallpaper.enabled(this);
+        prefs.edit().putString("wallpaper", on ? "wallhaven" : "glass").remove("wall_time").remove("wall_try").apply();
+        Layout.backup(this, prefs);
+        if (on) {
+            loadPhoto();
+            Wallpaper.refresh(this, this::loadPhoto);
+        } else {
+            showPhoto(null);
+        }
+        openSettings(menuAnchor, false); // the row's On/Off text
+    }
+
+    /** The photo changes the secondary text colours and the glass veil too: refresh like a theme change. */
+    private void showPhoto(Bitmap b) {
+        backdrop.setPhoto(b);
+        themeChanged();
+    }
+
+    /** Decodes the photo off the main thread and hands it to the backdrop, unless the setting went off meanwhile. */
+    private void loadPhoto() {
+        if (!Wallpaper.enabled(this)) return;
+        DisplayMetrics dm = getResources().getDisplayMetrics();
+        new Thread(() -> {
+            Bitmap b = Wallpaper.decode(Wallpaper.file(this), dm.widthPixels, dm.heightPixels);
+            if (b != null) main.post(() -> {
+                if (Wallpaper.enabled(this)) showPhoto(b);
+            });
+        }, "photo").start();
+    }
+
     /** Automatic: switches when the sun says so, and books the next look (hourly at most: timers skip standby). */
     private void checkTheme() {
         if (Theme.resolve(this)) themeChanged();
@@ -1082,7 +1141,7 @@ public final class Home extends Activity {
 
     /** Every view reads the theme while drawing, so a redraw does most of it. */
     private void themeChanged() {
-        overline.setTextColor(Theme.current.overline);
+        overline.setTextColor(Theme.current.overline());
         backdrop.themeChanged();
         redraw(getWindow().getDecorView());
         if (settingsOpen) {

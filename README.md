@@ -36,7 +36,7 @@ their order, the hidden apps and the theme (unless `install.sh` has a copy of th
 
 ### Layout backup
 
-Glass keeps a plain-text copy of its layout (rows and their order, hidden apps, theme) in
+Glass keeps a plain-text copy of its layout (rows and their order, hidden apps, theme, wallpaper setting) in
 `/sdcard/Android/data/io.github.b0reddev.glass/files/layout.txt`, rewritten whenever the layout changes.
 Before every install, `install.sh` copies it to `backups/<tv-ip>-layout.txt` on the PC; after a reinstall that
 left the TV without it, `install.sh` pushes it back and Glass imports it on its first start. A normal update
@@ -88,6 +88,17 @@ The gear button opens Glass's settings panel: the theme, and a shortcut to Andro
   panel shows the next switch. It happens live, and again on returning Home after standby.
 
 The choice applies immediately and is saved; the clock screensaver follows the look it starts with.
+
+### Wallpapers
+
+"Wallpapers from wallhaven" in the settings panel is **off by default**. Switched on, Glass shows one landscape
+photo a day from [wallhaven.cc](https://wallhaven.cc) as the background, in both themes, under an even dark veil
+so every text stays readable (WCAG AA). It is the only feature of Glass that uses the network: it asks wallhaven.cc
+only, SFW photos only, one image a day (at most; a failed try waits an hour), no larger than 4 MB, and needs no
+account or key. Switching it on fetches a new photo at once, which is also how to get another one; switching it
+off goes back to the theme's own wallpaper. The photo is kept as `wallpaper.img` in Glass's private files
+directory, and the setting is part of the layout backup. The photos belong to their authors: this is meant for
+personal use on your own TV.
 
 ## Screensaver
 

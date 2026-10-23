@@ -73,7 +73,7 @@ final class Row extends ViewGroup {
     @Override
     protected void onDraw(Canvas c) {
         if (labelAlpha <= 0) return;
-        int color = Theme.current.label;
+        int color = Theme.current.label();
         label.setColor(color);
         label.setAlpha((int) ((color >>> 24) * labelAlpha));
         c.drawText(title, padX + getScrollX(), labelH - Ui.dp(9), label); // the name doesn't scroll with the cells

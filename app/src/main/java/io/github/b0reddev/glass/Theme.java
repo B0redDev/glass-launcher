@@ -18,14 +18,19 @@ final class Theme {
     static final String AUTO = "auto";
     static String choice = "light";
     static Theme current = LIGHT;
+    /**
+     * A wallpaper photo is showing (Backdrop.setPhoto): both themes then use Light's secondary text and glass veil,
+     * because Dark's are made for the near-black night wallpaper and fail over a photo.
+     */
+    static boolean photo;
 
     final String id;
     /** Opacity of the focused app's colour wash over the wallpaper. */
     final float ambient;
     /** Light only: darkens the top and bottom of the wallpaper so text stays readable over the aurora. */
     final boolean scrim;
-    /** Secondary text: the row name above the title, and row names. */
-    final int overline, label;
+    /** Secondary text: the row name above the title, and row names. Read through overline() and label(). */
+    private final int overline, label;
     /** Fill over the sampled backdrop for pills and cards, for menus and panels, and for rows inside a panel. */
     final int glassFill, panelFill, rowFill;
     final int rimTop, rimBottom;
@@ -33,7 +38,19 @@ final class Theme {
     /** Focus ring colour; 0 means focus by zoom and a bright platter instead. */
     final int ring;
     /** Light only: a dark tint in the glass under pills, cards and panels, so their white text holds contrast. */
-    final int glassVeil;
+    private final int glassVeil;
+
+    int overline() {
+        return photo ? LIGHT.overline : overline;
+    }
+
+    int label() {
+        return photo ? LIGHT.label : label;
+    }
+
+    int glassVeil() {
+        return photo ? LIGHT.glassVeil : glassVeil;
+    }
 
     private Theme(String id, float ambient, boolean scrim, int overline, int label, int glassFill, int panelFill,
                   int rowFill, int rimTop, int rimBottom, float tileScale, int ring, int glassVeil) {
