@@ -25,6 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Function;
 
 /**
  * The opt-in daily wallpaper: one SFW landscape photo from wallhaven.cc, kept in the app's files directory.
@@ -97,8 +98,8 @@ final class Wallpaper {
         return true;
     }
 
-    /** The whole body of a 200 answer, at most {@code max} bytes. */
-    private static byte[] read(String url, int max) throws IOException {
+    /** The whole body of a 200 answer, at most {@code max} bytes. Also used for the Top Shelf's artwork. */
+    static byte[] read(String url, int max) throws IOException {
         HttpURLConnection h = (HttpURLConnection) new URL(url).openConnection();
         try {
             h.setConnectTimeout(10_000);
@@ -120,19 +121,27 @@ final class Wallpaper {
     }
 
     /**
-     * The image at exactly w×h (centre-cropped to the screen's shape), or null if it can't be read. Sub-sampled
-     * while decoding so a 4K photo is never held at full size. Call off the main thread.
+     * The image at exactly w×h (centre-cropped to that shape), or null if it can't be read. Sub-sampled while
+     * decoding so a 4K photo is never held at full size. Call off the main thread.
      */
     static Bitmap decode(File f, int w, int h) {
+        return fit(o -> BitmapFactory.decodeFile(f.getPath(), o), w, h);
+    }
+
+    static Bitmap decode(byte[] data, int w, int h) {
+        return fit(o -> BitmapFactory.decodeByteArray(data, 0, data.length, o), w, h);
+    }
+
+    private static Bitmap fit(Function<BitmapFactory.Options, Bitmap> source, int w, int h) {
         BitmapFactory.Options o = new BitmapFactory.Options();
         o.inJustDecodeBounds = true;
-        BitmapFactory.decodeFile(f.getPath(), o);
+        source.apply(o);
         if (o.outWidth <= 0) return null;
         int s = 1;
         while (o.outWidth / (s * 2) >= w && o.outHeight / (s * 2) >= h) s *= 2;
         o.inJustDecodeBounds = false;
         o.inSampleSize = s;
-        Bitmap b = BitmapFactory.decodeFile(f.getPath(), o);
+        Bitmap b = source.apply(o);
         if (b == null) return null;
         float k = Math.max((float) w / b.getWidth(), (float) h / b.getHeight());
         int cw = Math.min(b.getWidth(), Math.round(w / k)), ch = Math.min(b.getHeight(), Math.round(h / k));

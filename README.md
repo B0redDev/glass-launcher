@@ -56,8 +56,8 @@ Other otherwise. After that you decide with Move.
 | Remote | Action |
 |---|---|
 | ←/→ | Scroll the row; it stops at either end instead of jumping to another row |
-| ↑/↓ | Row above/below, on the closest item; ↑ from the first row reaches the buttons at the top right |
-| OK | Open the app, or switch to the HDMI input / aerial |
+| ↑/↓ | Row above/below, on the closest item; ↑ from Favourites enters the Top Shelf (or reaches the buttons at the top right) |
+| OK | Open the app, or switch to the HDMI input / aerial; on the Top Shelf, resume that episode or film |
 | Hold OK | Menu: Move, Hide / Show, App info, Show hidden apps |
 | Move → ←/→ | Reorder within the row (the tiles wiggle) |
 | Move → ↑/↓ | Move the app to the row above/below (changes its category) |
@@ -65,6 +65,20 @@ Other otherwise. After that you decide with Move.
 | Back / Home while on Glass | Back to the start of the first row |
 
 Rows, order and hidden apps are saved in the app's preferences (lost only when uninstalling it).
+
+### Top Shelf: continue watching
+
+As on tvOS, Favourites are the Dock and the area above them is the **Top Shelf** of the focused app: what it lets
+you resume, as a row of 16:9 pictures with a progress bar. Move along Favourites and the shelf follows the app;
+press ↑ to enter it, ←/→ to choose, OK to start playing where you left off (the app opens straight into the
+episode), ↓ to go back to the app. The focused item names the show in the title and the episode and time left
+under the picture; in the light theme the background takes the picture's colour.
+
+The items come from Android's own sources: the Watch Next programs an app publishes (Crunchyroll, Netflix...)
+and its preview channel when it is a "continue watching" one (Stremio). Finished items are left out, up to 12
+per app. Only Favourites get a shelf, as only the Dock does on tvOS; the shelf appears once any Favourite has
+something to resume. Reading other apps' rows needs the `READ_TV_LISTINGS` permission, which `install.sh` grants
+over ADB, so the TV never shows a prompt; without it there is simply no shelf.
 
 ## Top bar
 

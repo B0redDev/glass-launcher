@@ -24,6 +24,9 @@ fi
 # Android 14 can hold `adb install` waiting for an on-screen confirmation; pm install over the shell doesn't.
 "$ADB" -s "$TV" push "$APK" /data/local/tmp/glass.apk >/dev/null
 "$ADB" -s "$TV" shell pm install -r /data/local/tmp/glass.apk
+# The Top Shelf reads other apps' "continue watching" rows; a runtime permission, granted here so the TV
+# never shows a prompt (older Android versions don't have it: ignore the failure).
+"$ADB" -s "$TV" shell pm grant io.github.b0reddev.glass android.permission.READ_TV_LISTINGS 2>/dev/null || true
 # Glass imports the file only when its own prefs are empty, so a normal update never overwrites the live layout.
 if ! has_layout && [ -f "$BACKUP" ]; then
   "$ADB" -s "$TV" shell mkdir -p "$(dirname "$LAYOUT")"

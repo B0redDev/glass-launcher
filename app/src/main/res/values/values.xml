@@ -35,6 +35,10 @@
     <string name="row_tools">Tools</string>
     <string name="row_games">Games</string>
     <string name="row_other">Other</string>
+    <!-- The Top Shelf above Favourites -->
+    <string name="row_watching">Continue watching</string>
+    <string name="watching_episode" translatable="false">S%1$s · E%2$s</string>
+    <string name="watching_left">%d min left</string>
 
     <string name="input_connected">Connected</string>
     <string name="input_standby">Standby</string>

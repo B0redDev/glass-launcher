@@ -30,6 +30,8 @@
     <string name="row_tools">Strumenti</string>
     <string name="row_games">Giochi</string>
     <string name="row_other">Altro</string>
+    <string name="row_watching">Continua a guardare</string>
+    <string name="watching_left">%d min rimasti</string>
 
     <string name="input_connected">Collegato</string>
     <string name="input_standby">In standby</string>

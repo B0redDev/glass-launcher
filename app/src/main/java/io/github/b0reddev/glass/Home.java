@@ -31,6 +31,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.text.TextUtils;
 import android.text.format.DateFormat;
 import android.util.DisplayMetrics;
 import android.view.FocusFinder;
@@ -52,6 +53,7 @@ import android.widget.TextView;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashMap;
+import java.util.Map;
 import java.util.List;
 import java.util.TimeZone;
 
@@ -91,6 +93,12 @@ public final class Home extends Activity {
     private ValueAnimator scrollAnim, wiggle;
     private int favW, favH, scrollTarget;
     private volatile int artGen;
+    /** The Top Shelf (tvOS): above Favourites, the Dock, what the focused Favourite can resume. */
+    private Row shelf;
+    private String shelfPkg;
+    private Map<String, List<Watching.Item>> watching = new HashMap<>();
+    private final HashMap<String, Bitmap[]> shelfArt = new HashMap<>();
+    private volatile int shelfGen;
 
     private final BroadcastReceiver packages = new BroadcastReceiver() {
         @Override
@@ -158,6 +166,12 @@ public final class Home extends Activity {
         // The first row's cells start at FOCUS_Y; the bottom padding lets the last row scroll up there too.
         content.setPadding(0, Ui.dp(FOCUS_Y) - Ui.dp(22), 0, dm.heightPixels);
         int appW = Ui.dp(150), appH = Ui.dp(84.4f), gap = Ui.dp(16);
+        // First, so it sits above Favourites; shown once some Favourite has something to resume.
+        shelf = new Row(this, null, getString(R.string.row_watching), favW, favH, Ui.dp(20));
+        shelf.setVisibility(View.GONE);
+        LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(MATCH, WRAP);
+        sp.topMargin = Ui.dp(28); // clear of the title, as tvOS's Top Shelf is clear of everything above it
+        content.addView(shelf, sp);
         addRow(App.FAV, R.string.row_fav, favW, favH, Ui.dp(20));
         sources = new Row(this, null, getString(R.string.row_sources), Ui.dp(150), Ui.dp(56), gap);
         content.addView(sources, MATCH, WRAP);
@@ -174,6 +188,9 @@ public final class Home extends Activity {
         overline.setLetterSpacing(0.14f);
         overline.setAllCaps(true);
         title = Ui.text(this, Ui.semibold, 34, 0xFFFFFFFF);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        title.setMaxWidth(dm.widthPixels - 2 * side - Ui.dp(300)); // long show titles stop short of the clock
         titleBox.addView(overline);
         LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(WRAP, WRAP);
         tl.topMargin = Ui.dp(6);
@@ -268,6 +285,7 @@ public final class Home extends Activity {
         super.onResume();
         checkTheme(); // Automatic: the sunset may have passed while another app or standby had the screen
         Wallpaper.refresh(this, this::loadPhoto);
+        refreshShelf(); // coming back from an app: what was just watched moves on
     }
 
     @Override
@@ -342,6 +360,13 @@ public final class Home extends Activity {
             // Up/down always lands on the next row, on the cell closest across; Android's geometric search
             // would skip a short row (Giochi has one app) for a better-aligned cell further down.
             View f = getCurrentFocus();
+            if (f != null && f.getParent() == shelf && k == KeyEvent.KEYCODE_DPAD_DOWN) {
+                View owner = favTile(shelfPkg); // tvOS: down from the Top Shelf returns to the app it belongs to
+                if (owner != null) {
+                    owner.requestFocus();
+                    return true;
+                }
+            }
             if (f != null && f.getParent() instanceof Row) {
                 Row next = adjacentRow((Row) f.getParent(), k == KeyEvent.KEYCODE_DPAD_DOWN ? 1 : -1);
                 if (next != null) {
@@ -365,6 +390,7 @@ public final class Home extends Activity {
         loadArt(++artGen);
         findVpnApps();
         if (netState != -1) refreshNetwork(); // a VPN app installed or removed; before the first callback, wait for it
+        refreshShelf(); // the Favourites may have changed
     }
 
     private Tile tile(App a) {
@@ -431,7 +457,7 @@ public final class Home extends Activity {
     private View firstCell() {
         for (int i = 0; i < content.getChildCount(); i++) {
             Row r = (Row) content.getChildAt(i);
-            if (r.getVisibility() == View.VISIBLE && r.getChildCount() > 0) return r.getChildAt(0);
+            if (r != shelf && r.getVisibility() == View.VISIBLE && r.getChildCount() > 0) return r.getChildAt(0);
         }
         return null;
     }
@@ -461,6 +487,7 @@ public final class Home extends Activity {
         lastFocus = t;
         setTitle(rows.get(t.app.cat).title, t.app.label);
         if (t.ambient != null) backdrop.setAmbient(t.ambient);
+        if (t.getParent() == rows.get(App.FAV)) showShelf(t.app.pkg);
         focusRow((Row) t.getParent(), t);
     }
 
@@ -469,6 +496,130 @@ public final class Home extends Activity {
         setTitle(sources.title, name);
         backdrop.setAmbient(null);
         focusRow(sources, card);
+    }
+
+    // ---- Top Shelf ----
+
+    /** Re-reads what the Favourites can resume, off the main thread; touches the shelf only if it changed. */
+    private void refreshShelf() {
+        ArrayList<String> favs = new ArrayList<>();
+        for (App a : apps) if (App.FAV.equals(a.cat) && !a.hidden) favs.add(a.pkg);
+        new Thread(() -> {
+            Map<String, List<Watching.Item>> w = Watching.load(this, favs);
+            main.post(() -> {
+                if (w.equals(watching)) return;
+                watching = w;
+                shelfArt.keySet().retainAll(images(w));
+                boolean was = shelf.getVisibility() == View.VISIBLE;
+                shelf.setVisibility(w.isEmpty() ? View.GONE : View.VISIBLE);
+                String pkg = shelfPkg;
+                shelfPkg = null;
+                if (pkg != null) showShelf(pkg);
+                if (was == !w.isEmpty() || panel != null) return;
+                // The shelf came or went: settle the rows around the focus again.
+                View f = getCurrentFocus();
+                if (f != null && f.getParent() instanceof Row) focusRow((Row) f.getParent(), f);
+                else {
+                    View o = favTile(pkg);
+                    if (o != null) o.requestFocus();
+                }
+            });
+        }, "shelf").start();
+    }
+
+    private static ArrayList<String> images(Map<String, List<Watching.Item>> w) {
+        ArrayList<String> out = new ArrayList<>();
+        for (List<Watching.Item> l : w.values()) for (Watching.Item i : l) out.add(i.image);
+        return out;
+    }
+
+    /** The shelf shows the focused Favourite's items, as tvOS's Top Shelf follows the focused app in the Dock. */
+    private void showShelf(String pkg) {
+        if (pkg.equals(shelfPkg)) return;
+        shelfPkg = pkg;
+        View f = getCurrentFocus();
+        int at = f != null && f.getParent() == shelf ? shelf.indexOfChild(f) : -1;
+        relocating = true;
+        shelf.removeAllViews();
+        relocating = false;
+        List<Watching.Item> items = watching.get(pkg);
+        if (items != null) for (Watching.Item it : items) shelf.addView(card(it));
+        shelf.scrollTo(0, 0);
+        for (int i = 0; i < shelf.getChildCount(); i++) { // one app's shelf fades into the next
+            View c = shelf.getChildAt(i);
+            c.setAlpha(0f);
+            c.animate().alpha(1f).setDuration(220).start();
+        }
+        if (at >= 0) { // a refresh while on the shelf: stay on the same place in it
+            View c = shelf.getChildAt(Math.min(at, shelf.getChildCount() - 1));
+            View o = c != null ? c : favTile(pkg);
+            if (o != null) o.requestFocus();
+        }
+        shelf.invalidate();
+        loadShelfArt(++shelfGen);
+    }
+
+    private Card card(Watching.Item it) {
+        Card c = new Card(this, it, favW, favH);
+        c.setOnClickListener(v -> resume(v, it));
+        c.setOnFocusChangeListener((v, f) -> {
+            if (f && !relocating) focusedShelfCard(c);
+        });
+        Bitmap[] a = shelfArt.get(it.image);
+        if (a != null) c.setArt(a[0], a[1]);
+        return c;
+    }
+
+    private void focusedShelfCard(Card c) {
+        lastFocus = c;
+        String app = c.item.pkg;
+        for (App a : apps) if (a.pkg.equals(app)) app = a.label;
+        setTitle(getString(R.string.row_watching) + " · " + app, c.item.title);
+        if (c.ambient != null) backdrop.setAmbient(c.ambient);
+        focusRow(shelf, c);
+    }
+
+    /** Opens the item where it was left, in the app that published it; failing that, the app. */
+    private void resume(View v, Watching.Item it) {
+        try {
+            Intent i = Intent.parseUri(it.intent, Intent.URI_INTENT_SCHEME).setPackage(it.pkg)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            startActivity(i, ActivityOptions.makeScaleUpAnimation(v, 0, 0, v.getWidth(), v.getHeight()).toBundle());
+        } catch (Exception e) {
+            launch(v, openIntent(it.pkg));
+        }
+    }
+
+    private void loadShelfArt(int gen) {
+        ArrayList<Card> todo = new ArrayList<>();
+        for (int i = 0; i < shelf.getChildCount(); i++) {
+            Card c = (Card) shelf.getChildAt(i);
+            if (c.item.image != null && !shelfArt.containsKey(c.item.image)) todo.add(c);
+        }
+        if (todo.isEmpty()) return;
+        int w = Math.round(favW * Tile.FOCUSED), h = Math.round(favH * Tile.FOCUSED);
+        new Thread(() -> {
+            for (Card c : todo) {
+                if (gen != shelfGen) return;
+                Bitmap b = Watching.art(this, c.item.image, w, h);
+                if (b == null) continue;
+                Bitmap amb = Backdrop.ambient(b);
+                main.post(() -> {
+                    shelfArt.put(c.item.image, new Bitmap[]{b, amb});
+                    c.setArt(b, amb);
+                    if (lastFocus == c) backdrop.setAmbient(amb);
+                });
+            }
+        }, "shelf-art").start();
+    }
+
+    private Tile favTile(String pkg) {
+        Row fav = rows.get(App.FAV);
+        for (int i = 0; i < fav.getChildCount(); i++) {
+            Tile t = (Tile) fav.getChildAt(i);
+            if (t.app.pkg.equals(pkg)) return t;
+        }
+        return null;
     }
 
     private void setTitle(CharSequence row, CharSequence name) {
@@ -483,25 +634,29 @@ public final class Home extends Activity {
     /** The focused row moves under the title; rows above it go away behind the title, the ones below show their names. */
     private void focusRow(Row r, View child) {
         r.reveal(child);
-        boolean seen = false, firstVisible = true, rowIsFirst = false;
+        // tvOS: while the Dock (Favourites) or its Top Shelf has focus, the shelf stays in view above the Dock.
+        boolean dock = shelf.getVisibility() == View.VISIBLE && (r == shelf || r == rows.get(App.FAV));
+        boolean seen = false, firstVisible = true, rowIsFirst = dock;
         for (int i = 0; i < content.getChildCount(); i++) {
             Row x = (Row) content.getChildAt(i);
             if (x.getVisibility() != View.VISIBLE) continue;
             if (x == r) {
                 seen = true;
-                rowIsFirst = firstVisible;
+                rowIsFirst |= firstVisible;
             }
             firstVisible = false;
-            x.animate().alpha(seen ? 1f : 0f).setDuration(200).start();
-            x.showLabel(x != r);
+            x.animate().alpha(seen || (dock && x == shelf) ? 1f : 0f).setDuration(200).start();
+            x.showLabel(x != r && !(dock && x == rows.get(App.FAV))); // tvOS doesn't name the Dock
         }
         topBar.setDescendantFocusability(rowIsFirst ? ViewGroup.FOCUS_AFTER_DESCENDANTS : ViewGroup.FOCUS_BLOCK_DESCENDANTS);
-        if (content.isLaidOut()) scrollToRow(r);
-        else content.post(() -> scrollToRow(r));
+        Row anchor = dock ? shelf : r;
+        if (content.isLaidOut()) scrollToRow(anchor);
+        else content.post(() -> scrollToRow(anchor));
     }
 
     private void scrollToRow(Row r) {
-        int y = Math.max(0, r.getTop() + r.cellsTop() - Ui.dp(FOCUS_Y));
+        // The Dock and its Top Shelf sit at the top; any other row moves its cells under the title.
+        int y = r == shelf ? 0 : Math.max(0, r.getTop() + r.cellsTop() - Ui.dp(FOCUS_Y));
         if (y == scrollTarget && (scroll.getScrollY() == y || (scrollAnim != null && scrollAnim.isRunning()))) return;
         scrollTarget = y;
         if (scrollAnim != null) scrollAnim.cancel();
@@ -667,6 +822,7 @@ public final class Home extends Activity {
             reloadPending = false;
             reload(); // apps installed, removed or disabled during Move; App.save above already kept the order
         }
+        refreshShelf(); // an app may have moved into or out of Favourites
     }
 
     // ---- inputs row and network ----

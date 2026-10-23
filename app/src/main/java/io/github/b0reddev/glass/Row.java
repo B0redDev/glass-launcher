@@ -72,7 +72,7 @@ final class Row extends ViewGroup {
 
     @Override
     protected void onDraw(Canvas c) {
-        if (labelAlpha <= 0) return;
+        if (labelAlpha <= 0 || getChildCount() == 0) return; // an empty Top Shelf keeps its room, not its name
         int color = Theme.current.label();
         label.setColor(color);
         label.setAlpha((int) ((color >>> 24) * labelAlpha));
