@@ -32,7 +32,15 @@ Keep a copy of that file outside the build machine, and never in this repository
 
 If `install.sh` fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, restore the original keystore to
 `~/.android/debug.keystore` and run it again. **Do not uninstall Glass to get past it**: that erases the rows,
-their order, the hidden apps and the theme, and there is no Android backup to bring them back.
+their order, the hidden apps and the theme (unless `install.sh` has a copy of them, see below).
+
+### Layout backup
+
+Glass keeps a plain-text copy of its layout (rows and their order, hidden apps, theme) in
+`/sdcard/Android/data/io.github.b0reddev.glass/files/layout.txt`, rewritten whenever the layout changes.
+Before every install, `install.sh` copies it to `backups/<tv-ip>-layout.txt` on the PC; after a reinstall that
+left the TV without it, `install.sh` pushes it back and Glass imports it on its first start. A normal update
+never imports it. `backups/` is git-ignored: it lists your apps.
 
 ## Home in rows
 

@@ -12,9 +12,24 @@ export ANDROID_HOME="${ANDROID_HOME:-$HOME/Android/Sdk}"
 ./gradlew assembleRelease -q --console=plain
 APK=app/build/outputs/apk/release/app-release.apk
 "$ADB" connect "$TV" >/dev/null
+LAYOUT=/sdcard/Android/data/io.github.b0reddev.glass/files/layout.txt
+BACKUP="backups/${TV%%:*}-layout.txt"
+mkdir -p backups
+# Glass keeps a copy of its layout on the TV; keep one on the PC too, so a reinstall can put it back.
+has_layout() { [ "$("$ADB" -s "$TV" shell "[ -f $LAYOUT ] && echo y" | tr -d '\r')" = y ]; }
+if has_layout; then
+  "$ADB" -s "$TV" pull "$LAYOUT" "$BACKUP" >/dev/null
+  echo "Layout: saved to $BACKUP"
+fi
 # Android 14 can hold `adb install` waiting for an on-screen confirmation; pm install over the shell doesn't.
 "$ADB" -s "$TV" push "$APK" /data/local/tmp/glass.apk >/dev/null
 "$ADB" -s "$TV" shell pm install -r /data/local/tmp/glass.apk
+# Glass imports the file only when its own prefs are empty, so a normal update never overwrites the live layout.
+if ! has_layout && [ -f "$BACKUP" ]; then
+  "$ADB" -s "$TV" shell mkdir -p "$(dirname "$LAYOUT")"
+  "$ADB" -s "$TV" push "$BACKUP" "$LAYOUT" >/dev/null
+  echo "Layout: restored from $BACKUP"
+fi
 "$ADB" -s "$TV" shell rm /data/local/tmp/glass.apk
 "$ADB" -s "$TV" shell cmd package compile -m speed -f io.github.b0reddev.glass >/dev/null
 HOME_PKG=$("$ADB" -s "$TV" shell cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME \
