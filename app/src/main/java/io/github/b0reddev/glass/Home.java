@@ -122,6 +122,7 @@ public final class Home extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         Ui.init(this);
+        Layout.restoreIfEmpty(this);
         Theme.load(this);
         prefs = getSharedPreferences("glass", MODE_PRIVATE);
         DisplayMetrics dm = getResources().getDisplayMetrics();
@@ -251,6 +252,7 @@ public final class Home extends Activity {
         }
         buildSources();
         reload();
+        Layout.backup(this, prefs);
     }
 
     private void addRow(String cat, int name, int w, int h, int gap) {
@@ -556,6 +558,7 @@ public final class Home extends Activity {
     private void setHidden(App a, boolean h) {
         a.hidden = h;
         App.save(prefs, apps);
+        Layout.backup(this, prefs);
         boolean any = false;
         for (App x : apps) any |= x.hidden;
         if (!any) showHidden = false;
@@ -654,6 +657,7 @@ public final class Home extends Activity {
         }
         t.setLifted(false);
         App.save(prefs, apps);
+        Layout.backup(this, prefs);
         hint.animate().alpha(0f).setDuration(200).withEndAction(() -> hint.setVisibility(View.GONE)).start();
         topBar.animate().alpha(barAlpha(scroll.getScrollY())).setDuration(200).start();
         if (reloadPending) {
@@ -1058,6 +1062,7 @@ public final class Home extends Activity {
     private void applyTheme(String choice) {
         if (choice.equals(Theme.choice)) return;
         Theme.set(this, choice);
+        Layout.backup(this, prefs);
         themeChanged();
         scheduleTheme();
     }
