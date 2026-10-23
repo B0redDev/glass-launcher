@@ -18,6 +18,22 @@ the TV's Home: until you do, the Home button still goes to the current launcher.
 Requirements: ADB debugging enabled on the TV, JDK 17 (`JAVA_HOME`, default `~/opt/jdk-17*`), Android SDK
 platform 34 (`ANDROID_HOME`, default `~/Android/Sdk`), `adb` (`ADB`, default `~/platform-tools/adb`).
 
+### Signing key
+
+Builds are signed with the build machine's Android debug keystore (`~/.android/debug.keystore`), and Android
+installs an update only over an app signed with the same certificate. The certificate's SHA-256 fingerprint,
+to check a key with `keytool -list -v -keystore <file> -storepass android`:
+
+```
+02:BE:39:B6:93:AF:3F:7A:14:E1:82:FA:7E:48:E3:81:02:FF:51:6C:DF:DA:9B:9E:C8:06:3C:0A:87:FB:9B:7D
+```
+
+Keep a copy of that file outside the build machine, and never in this repository.
+
+If `install.sh` fails with `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, restore the original keystore to
+`~/.android/debug.keystore` and run it again. **Do not uninstall Glass to get past it**: that erases the rows,
+their order, the hidden apps and the theme, and there is no Android backup to bring them back.
+
 ## Home in rows
 
 Top to bottom: **Favourites** (large), **Inputs** (HDMI ports with live status, plus the aerial tuner;
