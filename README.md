@@ -31,7 +31,7 @@ Other otherwise. After that you decide with Move.
 
 | Remote | Action |
 |---|---|
-| ←/→ | Scroll the row |
+| ←/→ | Scroll the row; it stops at either end instead of jumping to another row |
 | ↑/↓ | Row above/below, on the closest item; ↑ from the first row reaches the buttons at the top right |
 | OK | Open the app, or switch to the HDMI input / aerial |
 | Hold OK | Menu: Move, Hide / Show, App info, Show hidden apps |
@@ -46,8 +46,9 @@ Rows, order and hidden apps are saved in the app's preferences (lost only when u
 
 Icons only, updated live as the network changes:
 
-- **VPN** (shown while online, when an app on the TV provides a VPN): green shield while a VPN is up, red
-  crossed shield while it is down, as CleanYourTV's badge. OK opens the VPN app; with several, a menu to pick one.
+- **VPN** (shown while online, when an app on the TV provides a VPN): a solid green badge with a shield while a
+  VPN is up, solid red with a crossed shield while it is down, as CleanYourTV's badge; readable on any
+  backdrop. OK opens the VPN app; with several, a menu to pick one.
 - **Network**: Wi-Fi, Ethernet or offline. OK opens the Wi-Fi settings.
 - **Gear**: Glass's settings (below).
 
@@ -55,7 +56,8 @@ Icons only, updated live as the network changes:
 
 The gear button opens Glass's settings panel: the theme, and a shortcut to Android's own settings.
 
-- **Light**: aurora wallpaper tinted by the focused app; focus zooms the tile and turns buttons white.
+- **Light**: aurora wallpaper tinted by the focused app; focus zooms the tile and turns buttons white. The tint
+  and the glass are darkened enough for white text to stay readable (WCAG AA) over bright banners.
 - **Dark** (after Nuvio OS): near-black with one cold light, no app colour; focus is a blue ring.
 - **Automatic** (after Free My TV): Light from sunrise, Dark from sunset. The times are worked out on the TV for
   the main city of its time zone (IANA `zone.tab` coordinates), with no network and no location permission; the

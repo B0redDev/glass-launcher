@@ -125,20 +125,28 @@ final class Backdrop extends View {
         paint(smallCanvas, smallRect);
         glass.eraseColor(0);
         glassCanvas.drawBitmap(small, 0, 0, vivid);
+        if (Theme.current.glassVeil != 0) glassCanvas.drawColor(Theme.current.glassVeil);
         glass.getPixels(px, 0, GW, 0, 0, GW, GH);
         blur(px, tmp, GW, GH, 3);
         blur(px, tmp, GW, GH, 3);
         glass.setPixels(px, 0, GW, 0, 0, GW, GH);
     }
 
-    /** The ambience for one app: its art at 32x18, saturated and blurred; drawn full screen it is a soft wash. */
+    /**
+     * The ambience for one app: its art at 32x18, saturated, dimmed and blurred; drawn full screen it is a soft
+     * wash. Dimmed so white text stays readable over it even for white or bright banners (Netflix, Play Store).
+     */
     static Bitmap ambient(Bitmap art) {
         final int w = 32, h = 18;
         Bitmap b = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
         Canvas c = new Canvas(b);
         c.drawColor(0xFF10131C);
         Paint p = new Paint(Paint.FILTER_BITMAP_FLAG);
-        p.setColorFilter(saturation(1.35f));
+        ColorMatrix cm = new ColorMatrix(), dim = new ColorMatrix();
+        cm.setSaturation(1.35f);
+        dim.setScale(0.65f, 0.65f, 0.65f, 1f);
+        cm.postConcat(dim);
+        p.setColorFilter(new ColorMatrixColorFilter(cm));
         float s = Math.max((float) w / art.getWidth(), (float) h / art.getHeight());
         RectF dst = new RectF(0, 0, art.getWidth() * s, art.getHeight() * s);
         dst.offset((w - dst.width()) / 2, (h - dst.height()) / 2);

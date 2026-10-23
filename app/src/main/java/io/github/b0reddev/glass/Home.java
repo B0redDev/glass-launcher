@@ -37,6 +37,7 @@ import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.view.animation.DecelerateInterpolator;
 import android.view.animation.LinearInterpolator;
@@ -200,7 +201,9 @@ public final class Home extends Activity {
                 v -> start(new Intent(Settings.ACTION_WIFI_SETTINGS), new Intent(Settings.ACTION_SETTINGS)));
         netIcon = (ImageView) netPill.getChildAt(0);
         topBar.addView(netPill);
-        topBar.addView(pill(R.drawable.ic_settings, null, v -> openSettings(v, true)));
+        GlassFrame gear = pill(R.drawable.ic_settings, null, v -> openSettings(v, true));
+        gear.setContentDescription(getString(R.string.settings));
+        topBar.addView(gear);
         root.addView(topBar, MATCH, WRAP);
 
         hint = new GlassFrame(this, backdrop, Ui.dp(20), true);
@@ -322,10 +325,15 @@ public final class Home extends Activity {
             lastFocus.requestFocus();
             return true;
         }
-        if (down && (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) && topBar.hasFocus()) {
-            // The ends of the bar don't fall through to the tiles below.
-            int dir = k == KeyEvent.KEYCODE_DPAD_LEFT ? View.FOCUS_LEFT : View.FOCUS_RIGHT;
-            if (FocusFinder.getInstance().findNextFocus(topBar, topBar.findFocus(), dir) == null) return true;
+        if (down && (k == KeyEvent.KEYCODE_DPAD_LEFT || k == KeyEvent.KEYCODE_DPAD_RIGHT) && panel == null) {
+            // The ends of a row or of the top bar stop there. Android's geometric search would otherwise jump
+            // to another row, often one faded out above the focused one.
+            View f = getCurrentFocus();
+            ViewParent strip = f == null ? null : f.getParent();
+            if (strip instanceof Row || strip == topBar) {
+                int dir = k == KeyEvent.KEYCODE_DPAD_LEFT ? View.FOCUS_LEFT : View.FOCUS_RIGHT;
+                if (FocusFinder.getInstance().findNextFocus((ViewGroup) strip, f, dir) == null) return true;
+            }
         }
         if (down && (k == KeyEvent.KEYCODE_DPAD_UP || k == KeyEvent.KEYCODE_DPAD_DOWN) && panel == null) {
             // Up/down always lands on the next row, on the cell closest across; Android's geometric search
@@ -700,7 +708,7 @@ public final class Home extends Activity {
         texts.setOrientation(LinearLayout.VERTICAL);
         TextView n = Ui.text(this, Ui.medium, 15, GlassFrame.LIGHT);
         n.setText(name);
-        TextView s = Ui.text(this, Ui.medium, 12, 0x99FFFFFF);
+        TextView s = Ui.text(this, Ui.medium, 12, 0xB3FFFFFF);
         if (tuner) s.setText(R.string.antenna);
         else {
             inputStatus.put(in.getId(), s);
@@ -777,11 +785,12 @@ public final class Home extends Activity {
         boolean show = online && (vpn || !vpnApps.isEmpty());
         vpnPill.setVisibility(show ? View.VISIBLE : View.GONE);
         if (!show) return;
-        int accent = vpn ? 0xFF30D158 : 0xFFFF453A;
+        // A solid badge, like CleanYourTV's: its colours don't depend on whatever the glass shows through.
         vpnIcon.setImageResource(vpn ? R.drawable.ic_shield_lock : R.drawable.ic_remove_moderator);
-        vpnIcon.setTag(accent); // GlassFrame keeps it when focus comes and goes
+        vpnIcon.setTag(vpn ? 0xFF06290F : 0xFF3A0703); // dark ink; GlassFrame keeps it when focus comes and goes
+        vpnPill.setSolid(vpn ? 0xFF30D158 : 0xFFFF453A);
         boolean platter = vpnPill.isFocused() && Theme.current.ring == 0;
-        vpnIcon.setImageTintList(ColorStateList.valueOf(platter ? GlassFrame.DARK : accent));
+        vpnIcon.setImageTintList(ColorStateList.valueOf(platter ? GlassFrame.DARK : (Integer) vpnIcon.getTag()));
         vpnPill.setContentDescription(getString(vpn ? R.string.vpn_on : R.string.vpn_off));
     }
 
@@ -957,6 +966,8 @@ public final class Home extends Activity {
             box.setOrientation(LinearLayout.VERTICAL);
             box.setClipChildren(false);
             Swatch s = new Swatch(this, ch);
+            s.setContentDescription(getString(names[i]));
+            s.setSelected(ch.equals(Theme.choice));
             s.setOnClickListener(v -> applyTheme(ch));
             box.addView(s, WRAP, WRAP); // a vertical LinearLayout defaults to MATCH_PARENT, which shrinks the box to the label
             TextView name = Ui.text(this, Ui.medium, 14, GlassFrame.LIGHT);
@@ -1009,7 +1020,7 @@ public final class Home extends Activity {
         panel.addView(android, al);
 
         panel.addView(new View(this), new LinearLayout.LayoutParams(MATCH, 0, 1f));
-        TextView about = Ui.text(this, Ui.medium, 12, 0x8CFFFFFF);
+        TextView about = Ui.text(this, Ui.medium, 12, 0x99FFFFFF);
         about.setText(getString(R.string.about, versionName()));
         panel.addView(about);
 

@@ -35,6 +35,7 @@ class GlassFrame extends LinearLayout {
     private final RectF r = new RectF();
     private final int[] loc = new int[2], bloc = new int[2];
     private boolean panel, bright;
+    private int solid;
     private Theme rimTheme;
 
     /** @param sample false for rows inside a panel: they only draw their fill and focus, the panel is the glass. */
@@ -55,6 +56,13 @@ class GlassFrame extends LinearLayout {
     /** Menus and the settings panel: a denser fill than pills and cards. */
     void setPanel() {
         panel = true;
+    }
+
+    /** An opaque badge colour in place of the glass (the VPN state); 0 for glass. */
+    void setSolid(int color) {
+        if (color == solid) return;
+        solid = color;
+        invalidate();
     }
 
     @Override
@@ -79,7 +87,7 @@ class GlassFrame extends LinearLayout {
         Theme t = Theme.current;
         float half = rim.getStrokeWidth() / 2;
         r.set(half, half, getWidth() - half, getHeight() - half);
-        if (sample && !bright) {
+        if (sample && !bright && solid == 0) {
             // Untransformed position: the parent's window position plus our offset (minus its scroll, for
             // cards in a scrolled row), so a focus zoom magnifies the glass a little instead of sliding it.
             View p = (View) getParent();
@@ -96,21 +104,28 @@ class GlassFrame extends LinearLayout {
             c.drawRoundRect(r, radius, radius, fill);
             return;
         }
-        int f = !sample ? t.rowFill : panel ? t.panelFill : t.glassFill;
-        if (f != 0) {
-            fill.setColor(f);
+        if (solid != 0) {
+            fill.setColor(solid);
             c.drawRoundRect(r, radius, radius, fill);
-        }
-        if (sample) {
-            if (rimTheme != t) {
-                rimTheme = t;
-                rim.setShader(new LinearGradient(0, 0, 0, getHeight(), t.rimTop, t.rimBottom, Shader.TileMode.CLAMP));
+        } else {
+            int f = !sample ? t.rowFill : panel ? t.panelFill : t.glassFill;
+            if (f != 0) {
+                fill.setColor(f);
+                c.drawRoundRect(r, radius, radius, fill);
             }
-            c.drawRoundRect(r, radius, radius, rim);
+            if (sample) {
+                if (rimTheme != t) {
+                    rimTheme = t;
+                    rim.setShader(new LinearGradient(0, 0, 0, getHeight(), t.rimTop, t.rimBottom, Shader.TileMode.CLAMP));
+                }
+                c.drawRoundRect(r, radius, radius, rim);
+            }
         }
         if (t.ring != 0 && isFocused()) {
-            fill.setColor(t.ringFill());
-            c.drawRoundRect(r, radius, radius, fill);
+            if (solid == 0) {
+                fill.setColor(t.ringFill());
+                c.drawRoundRect(r, radius, radius, fill);
+            }
             ring.setColor(t.ring);
             drawRing(c, this, ring, radius, sample);
         }

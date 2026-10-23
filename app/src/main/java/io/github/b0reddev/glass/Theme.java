@@ -10,10 +10,10 @@ import android.graphics.Bitmap;
  * after Nuvio OS): near-black with one cold light, no app colour, focus by a blue ring.
  */
 final class Theme {
-    static final Theme LIGHT = new Theme("light", 0.85f, true, 0x99FFFFFF, 0xB3FFFFFF,
-            0x1AFFFFFF, 0x29FFFFFF, 0, 0x8CFFFFFF, 0x14FFFFFF, Tile.FOCUSED, 0);
+    static final Theme LIGHT = new Theme("light", 0.85f, true, 0xB3FFFFFF, 0xCCFFFFFF,
+            0x1AFFFFFF, 0x1AFFFFFF, 0, 0x8CFFFFFF, 0x14FFFFFF, Tile.FOCUSED, 0, 0x40000000);
     static final Theme DARK = new Theme("dark", 0f, false, 0xFF8B9099, 0xFF9AA0A8,
-            0x0FFFFFFF, 0xB816181E, 0x0DFFFFFF, 0x1FFFFFFF, 0x14FFFFFF, 1.05f, 0xFF4EA0E8);
+            0x0FFFFFFF, 0xB816181E, 0x0DFFFFFF, 0x1FFFFFFF, 0x14FFFFFF, 1.05f, 0xFF4EA0E8, 0);
     /** The saved choice: {@link #LIGHT}'s or {@link #DARK}'s id, or this for Light by day and Dark from sunset. */
     static final String AUTO = "auto";
     static String choice = "light";
@@ -32,9 +32,11 @@ final class Theme {
     final float tileScale;
     /** Focus ring colour; 0 means focus by zoom and a bright platter instead. */
     final int ring;
+    /** Light only: a dark tint in the glass under pills, cards and panels, so their white text holds contrast. */
+    final int glassVeil;
 
     private Theme(String id, float ambient, boolean scrim, int overline, int label, int glassFill, int panelFill,
-                  int rowFill, int rimTop, int rimBottom, float tileScale, int ring) {
+                  int rowFill, int rimTop, int rimBottom, float tileScale, int ring, int glassVeil) {
         this.id = id;
         this.ambient = ambient;
         this.scrim = scrim;
@@ -47,6 +49,7 @@ final class Theme {
         this.rimBottom = rimBottom;
         this.tileScale = tileScale;
         this.ring = ring;
+        this.glassVeil = glassVeil;
     }
 
     Bitmap wallpaper(int w, int h) {

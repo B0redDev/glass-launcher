@@ -49,6 +49,7 @@ final class Tile extends View {
         this.app = app;
         radius = Ui.dp(12);
         setFocusable(true);
+        setContentDescription(app.label); // the banner is drawn, not text: screen readers need the name
         setDefaultFocusHighlightEnabled(false);
         setOutlineProvider(new ViewOutlineProvider() {
             @Override
